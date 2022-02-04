@@ -1,0 +1,227 @@
+{
+  "openapi" : "3.0.0",
+  "servers" : [ {
+    "description" : "SwaggerHub API Auto Mocking",
+    "url" : "https://virtserver.swaggerhub.com/odinuv/sync-actions/1.0.0"
+  }, {
+    "description" : "Azure Testing",
+    "url" : "https://sync-actions.east-us-2.azure.keboola-testing.com"
+  }, {
+    "description" : "US AWS Production",
+    "url" : "https://sync-actions.keboola.com"
+  }, {
+    "description" : "EU AWS Production",
+    "url" : "https://sync-actions.eu-central-1.keboola.com"
+  } ],
+  "security" : [ {
+    "ApiKeyAuth" : [ ]
+  } ],
+  "info" : {
+    "description" : "The API allows to run Synchronous actions on components.",
+    "version" : "1.0.0",
+    "title" : "Synchronous Actions",
+    "contact" : {
+      "email" : "devel@keboola.com"
+    },
+    "license" : {
+      "name" : "MIT",
+      "url" : "https://opensource.org/licenses/MIT"
+    }
+  },
+  "paths" : {
+    "/actions" : {
+      "get" : {
+        "summary" : "List available actions",
+        "description" : "Lists defined actions of a given component.\n",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "componentId",
+          "description" : "List actions for a given component.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "examples" : {
+            "id" : {
+              "value" : "keboola.ex-example"
+            }
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Success response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  },
+                  "example" : [ "testConnection", "listTables" ]
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "Error response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "summary" : "Process action",
+        "description" : "Runs the specified synchronous actions of the specified component.\n",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "required" : [ "componentId", "action", "configData" ],
+                "properties" : {
+                  "component" : {
+                    "type" : "string",
+                    "example" : "keboola.ex-example"
+                  },
+                  "action" : {
+                    "type" : "string",
+                    "example" : "testConnection",
+                    "description" : "Use List available actions API call to get a allowed values.\n"
+                  },
+                  "configData" : {
+                    "description" : "Configuration data for the component.\n",
+                    "type" : "object",
+                    "example" : {
+                      "parameters" : {
+                        "foo" : "bar"
+                      }
+                    }
+                  },
+                  "mode" : {
+                    "type" : "string",
+                    "enum" : [ "run", "debug" ],
+                    "example" : "run",
+                    "default" : "run",
+                    "description" : "Mode of the action.\n"
+                  },
+                  "branchId" : {
+                    "type" : "string",
+                    "example" : "1234",
+                    "description" : "ID of the development branch. When empty the main branch is used.\n"
+                  },
+                  "tag" : {
+                    "type" : "string",
+                    "example" : "1.2.3",
+                    "description" : "Version of the component to run. When empty, the latest published version is used.\n"
+                  }
+                }
+              },
+              "examples" : {
+                "Run configuration" : {
+                  "value" : {
+                    "component" : "keboola.ex-example",
+                    "action" : "testConnection",
+                    "configData" : {
+                      "foo" : "bar"
+                    }
+                  }
+                },
+                "Run debug configuration" : {
+                  "value" : {
+                    "component" : "keboola.ex-example",
+                    "action" : "testConnection",
+                    "mode" : "debug",
+                    "configData" : {
+                      "foo" : "bar"
+                    }
+                  }
+                },
+                "Run configuration on a branch with a specific version of the component" : {
+                  "value" : {
+                    "component" : "keboola.ex-example",
+                    "action" : "testConnection",
+                    "configData" : {
+                      "foo" : "bar"
+                    },
+                    "tag" : "1.2.3",
+                    "branchId" : "1234"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Action Succeeded",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "Error response",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "securitySchemes" : {
+      "ApiKeyAuth" : {
+        "type" : "apiKey",
+        "in" : "header",
+        "name" : "X-StorageApi-Token"
+      }
+    },
+    "schemas" : {
+      "Success" : {
+        "type" : "object",
+        "description" : "Variable object with the response from the component.",
+        "example" : {
+          "status" : "ok"
+        }
+      },
+      "Error" : {
+        "type" : "object",
+        "required" : [ "error", "code", "status", "context" ],
+        "properties" : {
+          "error" : {
+            "type" : "string",
+            "example" : "The value foobar is invalid"
+          },
+          "code" : {
+            "type" : "integer",
+            "example" : 400
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "error" ]
+          },
+          "exceptionId" : {
+            "type" : "string",
+            "example" : "exception-1234567890"
+          },
+          "context" : {
+            "type" : "object"
+          }
+        }
+      }
+    }
+  }
+}

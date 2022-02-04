@@ -1,0 +1,47 @@
+
+(* based on https://github.com/keboola/storage-api-php-client/blob/master/apiary.apib *)
+
+group =
+  '##' ident+ [ endpoint ]
+  route+
+  ;
+
+route =
+  '###' ident+ [ method ]
+  text
+  (* one request may be followed by multiple responses *)
+  (* there may be more than one request *)
+  attributes | request | response
+  ;
+
+attributes = '+' 'attributes' attribute+ ;
+attribute = '+' ident index? type description properties ;
+index = '[' ( '{' ident '}' )? ']' ;
+type = '(' modifier ( ',' inner_type )* ')' ;
+modifier =
+  | 'required'
+  | 'optional'
+  ;
+inner_type = 
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'enum[string]'
+  ;
+description = '-' text ;
+properties = property*
+property =
+  | '+' 'members' ( '+' spaced_ident description? )+
+  | '+' 'default' ':' value
+  ;
+
+(* `body` can be ignored for requests *)
+request = '+' 'request' ( mime_type headers? body? ) ;
+response = '+' 'response' code ( mime_type body )? ;
+
+headers = '+' 'headers' header+ ;
+header = ident ':' ident ;
+
+(* in case `body` is `string`, ignore it *)
+(* body is indentation sensitive *)
+body = '+' 'body' string | json ;
