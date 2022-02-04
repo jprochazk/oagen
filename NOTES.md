@@ -1,3 +1,5 @@
+
+Some issues without the SAPI blueprint file:
 - "comma separated list" should somehow be part of the type
   - technically, there are a few ways to infer this without making the change:
     - if the default value is comma separated
@@ -11,5 +13,3 @@
 - some variants are only listed as text, instead of being encoded as separate requests with different responses, or something similar.
   - example is `Component List`, which has the `exclude` parameter (should be an attribute), and the response depends on this parameter, but there is no example of it.
 - `async` means there are two different responses, but again, it is not encoded in any way
-
-api blueprint is not expressive enough to be transformed into TypeScript
