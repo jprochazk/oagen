@@ -1,5 +1,4 @@
 use anyhow::Result;
-use openapiv3::OpenAPI;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 

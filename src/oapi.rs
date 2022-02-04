@@ -36,7 +36,8 @@ pub enum Error {
   Generic(Cow<'static, str>),
 }
 
-// TODO: parse components - schemas, security
+// TODO: parse security
+// TODO: references may need to be resolvable even during type parsing
 // TODO: parse parameters - path, query - resolve references
 // TODO: parse request + responses -
 
@@ -78,9 +79,10 @@ fn parse_desc(op: &oapi3::Operation) -> Option<Cow<'_, str>> {
 }
 
 fn parse_params<'src>(
-  ctx: &mut Context,
-  op: &'src oapi3::Operation,
+  _ctx: &mut Context,
+  _op: &'src oapi3::Operation,
 ) -> Option<HashMap<Cow<'src, str>, ast::Parameter<'src>>> {
+  // TODO: this
   Some(HashMap::new())
 }
 
@@ -165,7 +167,7 @@ fn schema_to_type<'src>(
   types: &ast::Types<'src>,
   schema: &'src oapi3::Schema,
 ) -> Option<ast::Type<'src>> {
-  let name = schema.schema_data.title.as_deref().unwrap_or("[Unknown]");
+  // let name = schema.schema_data.title.as_deref().unwrap_or("[Unknown]");
   match &schema.schema_kind {
     oapi3::SchemaKind::Type(ty) => Some(match ty {
       oapi3::Type::String(_) => ast::Type::String,
