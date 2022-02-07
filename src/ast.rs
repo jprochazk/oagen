@@ -20,18 +20,19 @@ pub struct Route<'src> {
   pub endpoint: Cow<'src, str>,
   pub method: Method,
   pub description: Option<Cow<'src, str>>,
-  pub parameters: HashMap<Cow<'src, str>, Parameter<'src>>,
+  pub parameters: Parameters<'src>,
   pub request: Option<Request<'src>>,
-  pub response: Vec<(Code, Response<'src>)>,
+  pub response: Responses<'src>,
 }
+
+pub type Parameters<'src> = HashMap<Cow<'src, str>, Parameter<'src>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameter<'src> {
   pub name: Cow<'src, str>,
   pub description: Option<Cow<'src, str>>,
   pub kind: ParameterKind,
-  pub r#type: Type<'src>,
-  pub is_optional: bool,
+  pub ty: Type<'src>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,6 +54,8 @@ pub struct Request<'src> {
 }
 
 pub type Code = usize;
+
+pub type Responses<'src> = Vec<(Code, Response<'src>)>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Response<'src> {

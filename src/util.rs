@@ -1,3 +1,14 @@
+#[macro_export]
+macro_rules! map {
+  ($($key:expr => $value:expr),*) => {
+    [
+      $(
+        ($key.into(), $value)
+      ),*
+    ].into_iter().collect::<std::collections::HashMap<_,_,_>>()
+  }
+}
+
 fn lowercase(s: &str) -> impl Iterator<Item = char> + '_ {
   s.chars().map(|c| c.to_lowercase().next().unwrap_or(c))
 }
@@ -37,7 +48,7 @@ pub fn trim_in_place(s: impl Into<String>) -> String {
   unsafe {
     // SAFETY:
     // - `trimmed` is valid utf-8
-    // - all memory reads/writes are valid, because we are copying `N` bytes, where `N <= original length`
+    // - all memory reads/writes are valid, because we are copying `N` bytes of the string into itself, where `N` <= original length
     let v = s.as_mut_vec();
     std::ptr::copy(start, v.as_mut_ptr(), len);
     v.set_len(len);

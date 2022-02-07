@@ -1,8 +1,10 @@
+use super::*;
+
 use anyhow::Result;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 
-use crate::ast::{self, AsAst, Method, Route};
+use crate::ast::{self, AsAst, Index, Method, Parameter, ParameterKind, Route, Type};
 
 macro_rules! serde_oapi {
   ($p:literal) => {
@@ -59,7 +61,18 @@ fn parse_simple_api() -> Result<()> {
             endpoint: "/actions".into(),
             method: Method::Get,
             description: Some("Lists defined actions of a given component.".into()),
-            parameters: HashMap::new(),
+            parameters: map! {
+              "componentId" => Parameter {
+                name: "componentId".into(),
+                description: Some(
+                  "List actions for a given component.".into(),
+                ),
+                kind: ParameterKind::Query(
+                  Index::Array,
+                ),
+                ty: String,
+              }
+            },
             request: None,
             response: vec![],
           },
@@ -70,7 +83,7 @@ fn parse_simple_api() -> Result<()> {
             description: Some(
               "Runs the specified synchronous actions of the specified component.".into()
             ),
-            parameters: HashMap::new(),
+            parameters: map! {},
             request: None,
             response: vec![],
           },
@@ -80,25 +93,16 @@ fn parse_simple_api() -> Result<()> {
       use ast::Type::*;
       assert!(map_match(
         &ast.types,
-        &[
-          ("Success".into(), Any),
-          (
-            "Error".into(),
-            Object(
-              [
-                ("error".into(), String),
-                ("context".into(), Any),
-                ("status".into(), String),
-                ("exceptionId".into(), Optional(box String)),
-                ("code".into(), Number),
-              ]
-              .into_iter()
-              .collect(),
-            )
-          ),
-        ]
-        .into_iter()
-        .collect()
+        &map! {
+          "Success" => Any,
+          "Error" => Object(map! {
+            "error" => String,
+            "context" => Any,
+            "status" => String,
+            "exceptionId" => Optional(box String),
+            "code" => Number
+          })
+        }
       ));
     }
     Err((v, e)) => {

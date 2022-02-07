@@ -1,48 +1,15 @@
+pub mod error;
+
+use self::error::{Error, Scope};
 use crate::{ast, util};
 use openapiv3 as oapi3;
 use std::{borrow::Cow, collections::HashMap};
-use thiserror::Error;
-
-// TODO: error scopes instead of `at`
-#[derive(Debug, Clone, Error)]
-pub enum Error {
-  #[error("Error in {at}: References may not appear in `{field}`")]
-  UnsupportedReference {
-    at: Cow<'static, str>,
-    field: Cow<'static, str>,
-  },
-  #[error("Could not resolve reference {name}")]
-  UnresolvedReference { name: Cow<'static, str> },
-  #[error("Error in {at}: Field `{field}` is required")]
-  RequiredField {
-    at: Cow<'static, str>,
-    field: Cow<'static, str>,
-  },
-  #[error("Error in {at}: Field `{field_a}` is required, but may be substituted with `{field_b}`")]
-  RequiredFieldOr {
-    at: Cow<'static, str>,
-    field_a: Cow<'static, str>,
-    field_b: Cow<'static, str>,
-  },
-  #[error("Error in {at}: Field `{field}` has unknown value `{value}`")]
-  InvalidValue {
-    at: Cow<'static, str>,
-    field: Cow<'static, str>,
-    value: String,
-  },
-  #[error("{0} is unsupported")]
-  Unsupported(Cow<'static, str>),
-  #[error("{0}")]
-  Generic(Cow<'static, str>),
-}
 
 // TODO: parse security
-// TODO: references may need to be resolvable even during type parsing
-// TODO: parse parameters - path, query - resolve references
-// TODO: parse request + responses -
 
 #[derive(Default)]
 struct Context {
+  scope: Scope,
   errors: Vec<Error>,
 }
 
@@ -50,22 +17,21 @@ impl Context {
   pub fn error(&mut self, e: Error) {
     self.errors.push(e);
   }
+
+  pub fn scope(&self) -> Scope {
+    self.scope.clone()
+  }
 }
 
-fn parse_name<'src>(
-  ctx: &mut Context,
-  uri: &str,
-  method: ast::Method,
-  op: &'src oapi3::Operation,
-) -> Option<Cow<'src, str>> {
+fn parse_name<'src>(ctx: &mut Context, op: &'src oapi3::Operation) -> Option<Cow<'src, str>> {
   match op.summary.as_ref().or_else(|| op.operation_id.as_ref()) {
     Some(v) => Some(util::to_camel_case(v).into()),
     None => {
-      ctx.error(Error::RequiredFieldOr {
-        at: format!("{} {}", method, uri).into(),
-        field_a: "summary".into(),
-        field_b: "operation_id".into(),
-      });
+      ctx.error(Error::required_field_or(
+        ctx.scope(),
+        "summary",
+        "operation_id",
+      ));
       None
     }
   }
@@ -79,23 +45,61 @@ fn parse_desc(op: &oapi3::Operation) -> Option<Cow<'_, str>> {
 }
 
 fn parse_params<'src>(
-  _ctx: &mut Context,
-  _op: &'src oapi3::Operation,
-) -> Option<HashMap<Cow<'src, str>, ast::Parameter<'src>>> {
-  // TODO: this
-  Some(HashMap::new())
+  ctx: &mut Context,
+  types: &ast::Types<'src>,
+  op: &'src oapi3::Operation,
+) -> Option<ast::Parameters<'src>> {
+  let mut params = ast::Parameters::<'src>::with_capacity(op.parameters.len());
+  for param in op.parameters.iter() {
+    if let Some(param) = param.as_item() {
+      use oapi3::Parameter::*;
+      let (kind, data) = match param {
+        Query { parameter_data, .. } => {
+          (ast::ParameterKind::Query(ast::Index::Array), parameter_data)
+        }
+        Path { parameter_data, .. } => (ast::ParameterKind::Path, parameter_data),
+        Header { .. } | Cookie { .. } => {
+          return None;
+        }
+      };
+      let ty = resolve_type(
+        ctx,
+        types,
+        match data.format {
+          oapi3::ParameterSchemaOrContent::Schema(ref s) => s,
+          oapi3::ParameterSchemaOrContent::Content(_) => todo!(),
+        },
+      )?;
+      let param = ast::Parameter {
+        name: data.name.as_str().into(),
+        description: data.description.as_ref().map(|v| v.as_str().into()),
+        kind,
+        ty: if data.required {
+          ty
+        } else {
+          ast::Type::Optional(box ty)
+        },
+      };
+      params.insert(data.name.as_str().into(), param);
+    } else {
+      return None;
+    }
+  }
+  Some(params)
 }
 
 fn parse_route<'src>(
   ctx: &mut Context,
+  types: &ast::Types<'src>,
   uri: &'src str,
   method: ast::Method,
   op: &'src oapi3::Operation,
 ) -> Option<ast::Route<'src>> {
-  let name = parse_name(ctx, uri, method, op);
+  let name = parse_name(ctx, op);
   let endpoint = uri.into();
   let description = parse_desc(op);
-  let parameters = parse_params(ctx, op);
+  let parameters = parse_params(ctx, types, op);
+  // TODO: this
   let request = None;
   let response = vec![];
 
@@ -167,8 +171,8 @@ fn schema_to_type<'src>(
   types: &ast::Types<'src>,
   schema: &'src oapi3::Schema,
 ) -> Option<ast::Type<'src>> {
-  // let name = schema.schema_data.title.as_deref().unwrap_or("[Unknown]");
-  match &schema.schema_kind {
+  ctx.scope.push_opt(schema.schema_data.title.clone());
+  let ty = match &schema.schema_kind {
     oapi3::SchemaKind::Type(ty) => Some(match ty {
       oapi3::Type::String(_) => ast::Type::String,
       oapi3::Type::Number(_) => ast::Type::Number,
@@ -179,19 +183,21 @@ fn schema_to_type<'src>(
     }),
     oapi3::SchemaKind::OneOf { one_of } => one_of_to_union(ctx, types, &one_of[..]),
     oapi3::SchemaKind::AllOf { .. } => {
-      ctx.error(Error::Unsupported("all_of".into()));
+      ctx.error(Error::unsupported(ctx.scope(), "all_of"));
       Some(ast::Type::Any)
     }
     oapi3::SchemaKind::AnyOf { .. } => {
-      ctx.error(Error::Unsupported("any_of".into()));
+      ctx.error(Error::unsupported(ctx.scope(), "any_of"));
       Some(ast::Type::Any)
     }
     oapi3::SchemaKind::Not { .. } => {
-      ctx.error(Error::Unsupported("not".into()));
+      ctx.error(Error::unsupported(ctx.scope(), "not"));
       Some(ast::Type::Any)
     }
     oapi3::SchemaKind::Any(..) => Some(ast::Type::Any),
-  }
+  };
+  ctx.scope.pop();
+  ty
 }
 
 fn get_type<'src>(
@@ -202,9 +208,7 @@ fn get_type<'src>(
   match types.get(name).cloned() {
     Some(v) => Some(v),
     None => {
-      ctx.error(Error::UnresolvedReference {
-        name: name.to_string().into(),
-      });
+      ctx.error(Error::unresolved_ref(ctx.scope(), name.to_string()));
       None
     }
   }
@@ -241,11 +245,14 @@ fn parse_types<'src>(
 ) -> HashMap<Cow<'src, str>, ast::Type<'src>> {
   let no_types = HashMap::new();
   if let Some(components) = components {
-    components
+    ctx.scope.push("components");
+    let types = components
       .schemas
       .iter()
       .filter_map(|(name, item)| Some((name.as_str().into(), resolve_type(ctx, &no_types, item)?)))
-      .collect()
+      .collect();
+    ctx.scope.pop();
+    types
   } else {
     no_types
   }
@@ -263,7 +270,13 @@ impl ast::AsAst for oapi3::OpenAPI {
       .filter_map(|(uri, item)| Some((uri, item.as_item()?)))
     {
       routes.extend(info.iter().filter_map(|(m, op)| {
-        parse_route(&mut ctx, uri, m.try_into().expect("Invalid method"), op)
+        parse_route(
+          &mut ctx,
+          &types,
+          uri,
+          m.try_into().expect("Invalid method"),
+          op,
+        )
       }));
     }
 
