@@ -22,7 +22,7 @@ pub struct Route<'src> {
   pub description: Option<Cow<'src, str>>,
   pub parameters: Parameters<'src>,
   pub request: Option<Request<'src>>,
-  pub response: Responses<'src>,
+  pub responses: Responses<'src>,
 }
 
 pub type Parameters<'src> = HashMap<Cow<'src, str>, Parameter<'src>>;
@@ -56,11 +56,14 @@ pub struct Request<'src> {
 
 pub type Code = usize;
 
-pub type Responses<'src> = Vec<(Code, Response<'src>)>;
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Responses<'src> {
+  pub default: Option<Response<'src>>,
+  pub specific: Vec<(Code, Response<'src>)>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Response<'src> {
-  pub code: Code,
   pub mime_type: Option<Cow<'src, str>>,
   pub body: Option<Body<'src>>,
 }

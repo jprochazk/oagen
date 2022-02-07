@@ -2,7 +2,10 @@ use anyhow::Result;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 
-use crate::ast::{self, AsAst, Index, Method, Parameter, ParameterKind, Route};
+use crate::ast::{
+  self, AsAst, Body, Index, Method, Parameter, ParameterKind, Request,
+  Response, Responses, Route,
+};
 
 macro_rules! serde_oapi {
   ($p:literal) => {
@@ -59,6 +62,7 @@ try_parse_api!(sync_actions, "./sync-actions.json");
 
 #[test]
 fn parse_and_compare() -> Result<()> {
+  use ast::Type::*;
   match serde_oapi!("./sync-actions.json")?.as_ast() {
     Ok(ast) => {
       println!("{:#?}", ast);
@@ -83,7 +87,7 @@ fn parse_and_compare() -> Result<()> {
               }
             },
             request: None,
-            response: vec![],
+            responses: ast::Responses::default(),
           },
           Route {
             name: "processAction".into(),
@@ -93,13 +97,45 @@ fn parse_and_compare() -> Result<()> {
               "Runs the specified synchronous actions of the specified component.".into()
             ),
             parameters: map! {},
-            request: None,
-            response: vec![],
+            request: Some(Request { mime_type: Some("application/json".into()), headers: vec![], body: Some(Body::Typed(
+              Object(map! {
+                "action" => String,
+                "configData" => Any,
+                "component" => Optional(box String),
+                "tag" => Optional(box String),
+                "mode" => Optional(box Enum(vec!["run".into(), "debug".into()])),
+                "branchId" => Optional(box String)
+              }
+            )))}),
+            responses: Responses {
+              default: Some(
+                Response {
+                  mime_type: Some("application/json".into()),
+                  body: Some(Body::Typed(
+                    Object(map! {
+                      "error" => String,
+                      "exceptionId" => Optional(box String),
+                      "status" => Enum(vec!["error".into()]),
+                      "context" => Any,
+                      "code" => Number
+                    })
+                  )),
+                },
+              ),
+              specific: vec![
+                (
+                  201,
+                  Response {
+                    mime_type: Some("application/json".into()),
+                    body: Some(Body::Typed(Any)),
+                  },
+                ),
+              ]
+            },
           },
         ],
       );
 
-      use ast::Type::*;
       assert!(map_match(
         &ast.types,
         &map! {
@@ -107,7 +143,7 @@ fn parse_and_compare() -> Result<()> {
           "Error" => Object(map! {
             "error" => String,
             "context" => Any,
-            "status" => String,
+            "status" => Enum(vec!["error".into()]),
             "exceptionId" => Optional(box String),
             "code" => Number
           })

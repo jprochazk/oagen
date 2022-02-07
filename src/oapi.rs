@@ -38,7 +38,8 @@ fn parse_name<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> Option<Cow<'src, str>> {
-  match op.summary.as_ref().or_else(|| op.operation_id.as_ref()) {
+  ctx.scope.push("name");
+  let name = match op.summary.as_ref().or_else(|| op.operation_id.as_ref()) {
     Some(v) => Some(util::to_camel_case(v).into()),
     None => {
       ctx.error(Error::required_field_or(
@@ -48,7 +49,9 @@ fn parse_name<'src>(
       ));
       None
     }
-  }
+  };
+  ctx.scope.pop();
+  name
 }
 
 fn parse_desc(op: &oapi3::Operation) -> Option<Cow<'_, str>> {
@@ -62,6 +65,7 @@ fn parse_params<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> Option<ast::Parameters<'src>> {
+  ctx.scope.push("parameters");
   let mut params = ast::Parameters::<'src>::with_capacity(op.parameters.len());
   for param in op.parameters.iter() {
     if let Some(param) = param.as_item() {
@@ -74,17 +78,24 @@ fn parse_params<'src>(
           (ast::ParameterKind::Path, parameter_data)
         }
         Header { .. } | Cookie { .. } => {
+          ctx.scope.pop();
           return None;
         }
       };
-      let ty = resolve_type(
+      let ty = match resolve_type(
         ctx,
         Some(data.name.as_str()),
         match data.format {
           oapi3::ParameterSchemaOrContent::Schema(ref s) => s,
           oapi3::ParameterSchemaOrContent::Content(_) => todo!(),
         },
-      )?;
+      ) {
+        Some(ty) => ty,
+        None => {
+          ctx.scope.pop();
+          return None;
+        }
+      };
       let param = ast::Parameter {
         name: data.name.as_str().into(),
         description: data.description.as_ref().map(|v| v.as_str().into()),
@@ -97,10 +108,128 @@ fn parse_params<'src>(
       };
       params.insert(data.name.as_str().into(), param);
     } else {
+      ctx.scope.pop();
       return None;
     }
   }
+  ctx.scope.pop();
   Some(params)
+}
+
+fn parse_request<'src>(
+  ctx: &mut Context<'src>,
+  op: &'src oapi3::Operation,
+) -> Option<ast::Request<'src>> {
+  ctx.scope.push("request");
+  let req = match op.request_body.as_ref() {
+    Some(v) => v,
+    None => {
+      ctx.scope.pop();
+      return None;
+    }
+  };
+  let req = match req.as_item() {
+    Some(b) => b,
+    None => {
+      ctx.error(Error::unsupported_ref(ctx.scope(), "request_body"));
+      ctx.scope.pop();
+      return None;
+    }
+  };
+  let req = match req.content.get("application/json") {
+    Some(b) => b,
+    None => {
+      ctx.error(Error::generic(
+        ctx.scope(),
+        "only `application/json` mime-type is supported",
+      ));
+      ctx.scope.pop();
+      return None;
+    }
+  };
+  let req = req
+    .schema
+    .as_ref()
+    .and_then(|b| resolve_type(ctx, None, b))
+    .map(|ty| ast::Request {
+      mime_type: Some("application/json".into()),
+      headers: vec![],
+      body: Some(ast::Body::Typed(ty)),
+    });
+  ctx.scope.pop();
+  req
+}
+
+fn parse_code<'src>(
+  ctx: &mut Context<'src>,
+  code: &'src oapi3::StatusCode,
+) -> Option<ast::Code> {
+  match code {
+    oapi3::StatusCode::Code(v) => Some(*v as usize),
+    oapi3::StatusCode::Range(_) => {
+      ctx.error(Error::unsupported(ctx.scope(), "status code range"));
+      None
+    }
+  }
+}
+
+fn parse_response<'src>(
+  ctx: &mut Context<'src>,
+  res: &'src oapi3::Response,
+) -> Option<ast::Response<'src>> {
+  let res = match res.content.get("application/json") {
+    Some(res) => res,
+    None => {
+      ctx.error(Error::generic(
+        ctx.scope(),
+        "only `application/json` mime-type is supported",
+      ));
+      return None;
+    }
+  };
+  let res = ast::Response {
+    mime_type: Some("application/json".into()),
+    body: res
+      .schema
+      .as_ref()
+      .and_then(|schema| resolve_type(ctx, None, schema))
+      .map(ast::Body::Typed),
+  };
+  Some(res)
+}
+
+fn parse_responses<'src>(
+  ctx: &mut Context<'src>,
+  op: &'src oapi3::Operation,
+) -> ast::Responses<'src> {
+  let default =
+    match op.responses.default.as_ref().and_then(|res| res.as_item()) {
+      Some(res) => parse_response(ctx, res),
+      None => {
+        ctx.error(Error::unsupported_ref(ctx.scope(), "responses.default"));
+        None
+      }
+    };
+  let mut specific = Vec::with_capacity(op.responses.responses.len());
+  for (code, res) in op.responses.responses.iter() {
+    match res.as_item() {
+      Some(res) => {
+        let code = match parse_code(ctx, code) {
+          Some(c) => c,
+          None => continue,
+        };
+        let res = match parse_response(ctx, res) {
+          Some(res) => res,
+          None => continue,
+        };
+        specific.push((code, res));
+      }
+      None => {
+        ctx.error(Error::unsupported_ref(ctx.scope(), "responses"));
+      }
+    }
+  }
+  ast::Responses { default, specific }
 }
 
 fn parse_route<'src>(
@@ -109,14 +238,14 @@ fn parse_route<'src>(
   method: ast::Method,
   op: &'src oapi3::Operation,
 ) -> Option<ast::Route<'src>> {
+  ctx.scope.push(format!("{} {}", method, uri));
   let name = parse_name(ctx, op);
   let endpoint = uri.into();
   let description = parse_desc(op);
   let parameters = parse_params(ctx, op);
-  // TODO: this
-  let request = None;
-  let response = vec![];
-
+  let request = parse_request(ctx, op);
+  let responses = parse_responses(ctx, op);
+  ctx.scope.pop();
   Some(ast::Route {
     name: name?,
     endpoint,
@@ -124,7 +253,7 @@ fn parse_route<'src>(
     description,
     parameters: parameters?,
     request,
-    response,
+    responses,
   })
 }
 
@@ -228,17 +357,16 @@ fn schema_to_type<'src>(
   name: Option<&'src str>,
   schema: &'src oapi3::Schema,
 ) -> Option<ast::Type<'src>> {
-  // TODO: parse enums
   ctx.scope.push_opt(name);
   let ty = match &schema.schema_kind {
-    oapi3::SchemaKind::Type(ty) => Some(match ty {
-      oapi3::Type::String(str) => string_type(ctx, str),
-      oapi3::Type::Number(_) => ast::Type::Number,
-      oapi3::Type::Integer(_) => ast::Type::Number,
-      oapi3::Type::Boolean {} => ast::Type::Boolean,
-      oapi3::Type::Object(obj) => object_type(ctx, obj)?,
-      oapi3::Type::Array(arr) => array_type(ctx, arr)?,
-    }),
+    oapi3::SchemaKind::Type(ty) => match ty {
+      oapi3::Type::String(str) => Some(string_type(ctx, str)),
+      oapi3::Type::Number(_) => Some(ast::Type::Number),
+      oapi3::Type::Integer(_) => Some(ast::Type::Number),
+      oapi3::Type::Boolean {} => Some(ast::Type::Boolean),
+      oapi3::Type::Object(obj) => object_type(ctx, obj),
+      oapi3::Type::Array(arr) => array_type(ctx, arr),
+    },
     oapi3::SchemaKind::OneOf { one_of: values } => one_of(ctx, &values[..]),
     oapi3::SchemaKind::AllOf { all_of: values } => all_of(ctx, &values[..]),
     oapi3::SchemaKind::AnyOf { .. } => {
@@ -284,15 +412,14 @@ fn resolve_reference<'src>(
   ctx: &mut Context<'src>,
   name: &'src str,
 ) -> Option<ast::Type<'src>> {
+  let name = name.split('/').last().unwrap_or(name);
   match ctx.types.get(name).cloned() {
     Some(v) => Some(v),
     None => {
       if ctx.can_insert {
         if let Some(components) = ctx.components {
-          if let Some(name) = name.split('/').last() {
-            if let Some(schema) = components.schemas.get(name) {
-              return resolve_type(ctx, Some(name), schema);
-            }
+          if let Some(schema) = components.schemas.get(name) {
+            return resolve_type(ctx, Some(name), schema);
           }
         }
       }

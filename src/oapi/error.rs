@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 use thiserror::Error;
 
-#[derive(Debug, Clone, Default)]
-pub struct Scope(pub Vec<Option<String>>);
+#[derive(Clone, Default)]
+pub struct Scope(Vec<Option<String>>);
 
 impl Scope {
   pub fn push<S>(&mut self, name: S)
@@ -21,6 +21,14 @@ impl Scope {
 
   pub fn pop(&mut self) {
     self.0.pop();
+  }
+}
+
+impl std::fmt::Debug for Scope {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_list()
+      .entries(self.0.iter().filter_map(|v| v.as_deref()))
+      .finish()
   }
 }
 
