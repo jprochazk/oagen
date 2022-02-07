@@ -24,23 +24,8 @@ impl Scope {
   }
 }
 
-impl std::fmt::Display for Scope {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(
-      f,
-      "{}",
-      self
-        .0
-        .iter()
-        .filter_map(|v| v.clone())
-        .collect::<Vec<_>>()
-        .join(".")
-    )
-  }
-}
-
 #[derive(Debug, Clone, Error)]
-#[error("Error in {scope}: {kind}")]
+#[error("Error in {scope:?}: {kind}")]
 pub struct Error {
   scope: Scope,
   kind: ErrorKind,
@@ -95,6 +80,14 @@ impl Error {
     }
   }
 
+  pub fn duplicate_keys<A: Into<Cow<'static, str>>>(scope: Scope, keys: Vec<A>) -> Self {
+    use ErrorKind::*;
+    Self {
+      scope,
+      kind: DuplicateKeys(keys.into_iter().map(|v| v.into()).collect()),
+    }
+  }
+
   pub fn unsupported<A: Into<Cow<'static, str>>>(scope: Scope, what: A) -> Self {
     use ErrorKind::*;
     Self {
@@ -124,6 +117,8 @@ pub enum ErrorKind {
   RequiredFieldOr(Cow<'static, str>, Cow<'static, str>),
   #[error("field `{0}` has unknown value `{1}`")]
   InvalidValue(Cow<'static, str>, Cow<'static, str>),
+  #[error("found duplicate keys: `{0:?}`")]
+  DuplicateKeys(Vec<Cow<'static, str>>),
   #[error("{0} is unsupported")]
   Unsupported(Cow<'static, str>),
   #[error("{0}")]

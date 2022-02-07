@@ -51,6 +51,7 @@ pub enum Index {
 pub struct Request<'src> {
   pub mime_type: Option<Cow<'src, str>>,
   pub headers: Vec<Cow<'src, str>>,
+  pub body: Option<Body<'src>>,
 }
 
 pub type Code = usize;

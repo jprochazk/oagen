@@ -35,22 +35,31 @@ where
   true
 }
 
-#[test]
-fn parse_scheduler_api() -> Result<()> {
-  match serde_oapi!("./odinuv-scheduler-1.0.0-swagger.json")?.as_ast() {
-    Ok(v) => println!("{:#?}", v),
-    Err((v, e)) => {
-      println!("{:#?}", v);
-      eprintln!("{:#?}", e);
-      panic!("Errors were not empty");
+macro_rules! try_parse_api {
+  ($test_name:ident, $name:literal) => {
+    #[test]
+    fn $test_name() -> anyhow::Result<()> {
+      match serde_oapi!($name)?.as_ast() {
+        Ok(_) => Ok(()),
+        Err((v, e)) => {
+          println!("{:#?}", v);
+          eprintln!("{:#?}", e);
+          panic!("Errors were not empty");
+        }
+      }
     }
   };
-  Ok(())
 }
 
+try_parse_api!(job_queue, "./job-queue.json");
+try_parse_api!(sandboxes, "./sandboxes.json");
+try_parse_api!(sapi_importer, "./sapi-importer.json");
+try_parse_api!(scheduler, "./scheduler.json");
+try_parse_api!(sync_actions, "./sync-actions.json");
+
 #[test]
-fn parse_simple_api() -> Result<()> {
-  match serde_oapi!("./odinuv-sync-actions-1.0.0-swagger.json")?.as_ast() {
+fn parse_and_compare() -> Result<()> {
+  match serde_oapi!("./sync-actions.json")?.as_ast() {
     Ok(ast) => {
       println!("{:#?}", ast);
       assert_eq!(
