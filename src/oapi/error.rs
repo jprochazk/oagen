@@ -32,7 +32,10 @@ pub struct Error {
 }
 
 impl Error {
-  pub fn unsupported_ref<A: Into<Cow<'static, str>>>(scope: Scope, field: A) -> Self {
+  pub fn unsupported_ref<A: Into<Cow<'static, str>>>(
+    scope: Scope,
+    field: A,
+  ) -> Self {
     use ErrorKind::*;
     Self {
       scope,
@@ -40,7 +43,10 @@ impl Error {
     }
   }
 
-  pub fn unresolved_ref<A: Into<Cow<'static, str>>>(scope: Scope, name: A) -> Self {
+  pub fn unresolved_ref<A: Into<Cow<'static, str>>>(
+    scope: Scope,
+    name: A,
+  ) -> Self {
     use ErrorKind::*;
     Self {
       scope,
@@ -48,7 +54,10 @@ impl Error {
     }
   }
 
-  pub fn required_field<A: Into<Cow<'static, str>>>(scope: Scope, field: A) -> Self {
+  pub fn required_field<A: Into<Cow<'static, str>>>(
+    scope: Scope,
+    field: A,
+  ) -> Self {
     use ErrorKind::*;
     Self {
       scope,
@@ -56,7 +65,10 @@ impl Error {
     }
   }
 
-  pub fn required_field_or<A: Into<Cow<'static, str>>, B: Into<Cow<'static, str>>>(
+  pub fn required_field_or<
+    A: Into<Cow<'static, str>>,
+    B: Into<Cow<'static, str>>,
+  >(
     scope: Scope,
     a: A,
     b: B,
@@ -68,7 +80,10 @@ impl Error {
     }
   }
 
-  pub fn invalid_value<A: Into<Cow<'static, str>>, B: Into<Cow<'static, str>>>(
+  pub fn invalid_value<
+    A: Into<Cow<'static, str>>,
+    B: Into<Cow<'static, str>>,
+  >(
     scope: Scope,
     field: A,
     value: B,
@@ -80,7 +95,10 @@ impl Error {
     }
   }
 
-  pub fn duplicate_keys<A: Into<Cow<'static, str>>>(scope: Scope, keys: Vec<A>) -> Self {
+  pub fn duplicate_keys<A: Into<Cow<'static, str>>>(
+    scope: Scope,
+    keys: Vec<A>,
+  ) -> Self {
     use ErrorKind::*;
     Self {
       scope,
@@ -88,7 +106,10 @@ impl Error {
     }
   }
 
-  pub fn unsupported<A: Into<Cow<'static, str>>>(scope: Scope, what: A) -> Self {
+  pub fn unsupported<A: Into<Cow<'static, str>>>(
+    scope: Scope,
+    what: A,
+  ) -> Self {
     use ErrorKind::*;
     Self {
       scope,

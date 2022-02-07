@@ -34,7 +34,10 @@ impl<'src> Context<'src> {
   }
 }
 
-fn parse_name<'src>(ctx: &mut Context<'src>, op: &'src oapi3::Operation) -> Option<Cow<'src, str>> {
+fn parse_name<'src>(
+  ctx: &mut Context<'src>,
+  op: &'src oapi3::Operation,
+) -> Option<Cow<'src, str>> {
   match op.summary.as_ref().or_else(|| op.operation_id.as_ref()) {
     Some(v) => Some(util::to_camel_case(v).into()),
     None => {
@@ -67,7 +70,9 @@ fn parse_params<'src>(
         Query { parameter_data, .. } => {
           (ast::ParameterKind::Query(ast::Index::Array), parameter_data)
         }
-        Path { parameter_data, .. } => (ast::ParameterKind::Path, parameter_data),
+        Path { parameter_data, .. } => {
+          (ast::ParameterKind::Path, parameter_data)
+        }
         Header { .. } | Cookie { .. } => {
           return None;
         }
@@ -136,6 +141,23 @@ fn one_of<'src>(
     }
   }
   Some(ast::Type::Union(parts))
+}
+
+fn string_type<'src>(
+  _ctx: &mut Context<'src>,
+  str: &'src oapi3::StringType,
+) -> ast::Type<'src> {
+  let variants = str
+    .enumeration
+    .iter()
+    .cloned()
+    .filter_map(|v| v.map(Cow::from))
+    .collect::<Vec<_>>();
+  if variants.is_empty() {
+    ast::Type::String
+  } else {
+    ast::Type::Enum(variants)
+  }
 }
 
 fn object_type<'src>(
@@ -210,7 +232,7 @@ fn schema_to_type<'src>(
   ctx.scope.push_opt(name);
   let ty = match &schema.schema_kind {
     oapi3::SchemaKind::Type(ty) => Some(match ty {
-      oapi3::Type::String(_) => ast::Type::String,
+      oapi3::Type::String(str) => string_type(ctx, str),
       oapi3::Type::Number(_) => ast::Type::Number,
       oapi3::Type::Integer(_) => ast::Type::Number,
       oapi3::Type::Boolean {} => ast::Type::Boolean,
@@ -258,7 +280,10 @@ fn resolve_item<'src>(
   ty
 }
 
-fn resolve_reference<'src>(ctx: &mut Context<'src>, name: &'src str) -> Option<ast::Type<'src>> {
+fn resolve_reference<'src>(
+  ctx: &mut Context<'src>,
+  name: &'src str,
+) -> Option<ast::Type<'src>> {
   match ctx.types.get(name).cloned() {
     Some(v) => Some(v),
     None => {

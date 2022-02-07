@@ -1,10 +1,8 @@
-use super::*;
-
 use anyhow::Result;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 
-use crate::ast::{self, AsAst, Index, Method, Parameter, ParameterKind, Route, Type};
+use crate::ast::{self, AsAst, Index, Method, Parameter, ParameterKind, Route};
 
 macro_rules! serde_oapi {
   ($p:literal) => {
@@ -38,12 +36,14 @@ where
 macro_rules! try_parse_api {
   ($test_name:ident, $name:literal) => {
     #[test]
-    fn $test_name() -> anyhow::Result<()> {
-      match serde_oapi!($name)?.as_ast() {
-        Ok(_) => Ok(()),
+    fn $test_name() {
+      match serde_oapi!($name).unwrap().as_ast() {
+        Ok(v) => {
+          println!("{v:#?}");
+        }
         Err((v, e)) => {
-          println!("{:#?}", v);
-          eprintln!("{:#?}", e);
+          println!("{v:#?}");
+          eprintln!("{e:#?}");
           panic!("Errors were not empty");
         }
       }
