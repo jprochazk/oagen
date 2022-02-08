@@ -21,7 +21,7 @@ pub struct Route<'src> {
   pub method: Method,
   pub description: Option<Cow<'src, str>>,
   pub parameters: Parameters<'src>,
-  pub request: Option<Request<'src>>,
+  pub requests: Requests<'src>,
   pub responses: Responses<'src>,
 }
 
@@ -47,9 +47,10 @@ pub enum Index {
   Key,
 }
 
+pub type Requests<'src> = Vec<(MimeType, Request<'src>)>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Request<'src> {
-  pub mime_type: Option<Cow<'src, str>>,
   pub headers: Vec<Cow<'src, str>>,
   pub body: Option<Body<'src>>,
 }
@@ -64,7 +65,6 @@ pub struct Responses<'src> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Response<'src> {
-  pub mime_type: Option<Cow<'src, str>>,
   pub body: Option<Body<'src>>,
 }
 
@@ -87,7 +87,7 @@ pub enum Type<'src> {
   Optional(Box<Type<'src>>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Method {
   Get,
   Post,
@@ -126,7 +126,73 @@ impl TryFrom<String> for Method {
   }
 }
 
+impl std::fmt::Debug for Method {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    use Method::*;
+    write!(
+      f,
+      "{}",
+      match self {
+        Get => "get",
+        Post => "post",
+        Put => "put",
+        Delete => "delete",
+        Patch => "patch",
+        Head => "head",
+        Options => "options",
+        Trace => "trace",
+        Connect => "connect",
+      }
+    )
+  }
+}
+
 impl std::fmt::Display for Method {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    std::fmt::Debug::fmt(self, f)
+  }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum MimeType {
+  Multipart_FormData,
+  Application_FormUrlEncoded,
+  Application_Json,
+  Text_Plain,
+}
+
+impl<'src> TryFrom<&'src str> for MimeType {
+  type Error = ();
+
+  fn try_from(value: &'src str) -> Result<Self, Self::Error> {
+    use MimeType::*;
+    Ok(match value {
+      "multipart/form-data" => Multipart_FormData,
+      "application/x-www-form-urlencoded" => Application_FormUrlEncoded,
+      "application/json" => Application_Json,
+      "text/plain" => Text_Plain,
+      _ => return Err(()),
+    })
+  }
+}
+
+impl std::fmt::Debug for MimeType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{}",
+      match self {
+        Self::Multipart_FormData => "multipart/form-data",
+        Self::Application_FormUrlEncoded => "application/x-www-form-urlencoded",
+        Self::Application_Json => "application/json",
+        Self::Text_Plain => "text/plain",
+      }
+    )
+  }
+}
+
+impl std::fmt::Display for MimeType {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     std::fmt::Debug::fmt(self, f)
   }

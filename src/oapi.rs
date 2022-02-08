@@ -1,6 +1,6 @@
 pub mod error;
 
-use self::error::{Error, Scope};
+use self::error::{Error, ErrorKind, Scope};
 use crate::{ast, util};
 use openapiv3 as oapi3;
 use std::{borrow::Cow, collections::HashMap};
@@ -25,12 +25,19 @@ impl<'src> Context<'src> {
       components,
     }
   }
-  pub fn error(&mut self, e: Error) {
-    self.errors.push(e);
+  pub fn error(&mut self, e: ErrorKind) {
+    self.errors.push(Error::new(self.scope.clone(), e));
   }
 
-  pub fn scope(&self) -> Scope {
-    self.scope.clone()
+  pub fn scope<S: Into<String>>(&self, name: S) -> error::ScopeGuard {
+    self.scope.named(name)
+  }
+
+  pub fn scope_opt<S: Into<String>>(
+    &self,
+    name: Option<S>,
+  ) -> error::ScopeGuard {
+    self.scope.named_opt(name)
   }
 }
 
@@ -38,20 +45,14 @@ fn parse_name<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> Option<Cow<'src, str>> {
-  ctx.scope.push("name");
-  let name = match op.summary.as_ref().or_else(|| op.operation_id.as_ref()) {
+  let _scope = ctx.scope("name");
+  match op.summary.as_ref().or_else(|| op.operation_id.as_ref()) {
     Some(v) => Some(util::to_camel_case(v).into()),
     None => {
-      ctx.error(Error::required_field_or(
-        ctx.scope(),
-        "summary",
-        "operation_id",
-      ));
+      ctx.error(Error::required_field_or("summary", "operation_id"));
       None
     }
-  };
-  ctx.scope.pop();
-  name
+  }
 }
 
 fn parse_desc(op: &oapi3::Operation) -> Option<Cow<'_, str>> {
@@ -65,7 +66,7 @@ fn parse_params<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> Option<ast::Parameters<'src>> {
-  ctx.scope.push("parameters");
+  let _scope = ctx.scope("parameters");
   let mut params = ast::Parameters::<'src>::with_capacity(op.parameters.len());
   for param in op.parameters.iter() {
     if let Some(param) = param.as_item() {
@@ -78,7 +79,6 @@ fn parse_params<'src>(
           (ast::ParameterKind::Path, parameter_data)
         }
         Header { .. } | Cookie { .. } => {
-          ctx.scope.pop();
           return None;
         }
       };
@@ -92,7 +92,6 @@ fn parse_params<'src>(
       ) {
         Some(ty) => ty,
         None => {
-          ctx.scope.pop();
           return None;
         }
       };
@@ -108,56 +107,62 @@ fn parse_params<'src>(
       };
       params.insert(data.name.as_str().into(), param);
     } else {
-      ctx.scope.pop();
       return None;
     }
   }
-  ctx.scope.pop();
   Some(params)
 }
 
 fn parse_request<'src>(
   ctx: &mut Context<'src>,
-  op: &'src oapi3::Operation,
+  req: &'src oapi3::MediaType,
 ) -> Option<ast::Request<'src>> {
-  ctx.scope.push("request");
-  let req = match op.request_body.as_ref() {
-    Some(v) => v,
-    None => {
-      ctx.scope.pop();
-      return None;
-    }
-  };
-  let req = match req.as_item() {
-    Some(b) => b,
-    None => {
-      ctx.error(Error::unsupported_ref(ctx.scope(), "request_body"));
-      ctx.scope.pop();
-      return None;
-    }
-  };
-  let req = match req.content.get("application/json") {
-    Some(b) => b,
-    None => {
-      ctx.error(Error::generic(
-        ctx.scope(),
-        "only `application/json` mime-type is supported",
-      ));
-      ctx.scope.pop();
-      return None;
-    }
-  };
-  let req = req
+  req
     .schema
     .as_ref()
     .and_then(|b| resolve_type(ctx, None, b))
     .map(|ty| ast::Request {
-      mime_type: Some("application/json".into()),
       headers: vec![],
       body: Some(ast::Body::Typed(ty)),
-    });
-  ctx.scope.pop();
-  req
+    })
+}
+
+fn parse_requests<'src>(
+  ctx: &mut Context<'src>,
+  op: &'src oapi3::Operation,
+) -> ast::Requests<'src> {
+  let _scope = ctx.scope("requests");
+  let body = match op.request_body.as_ref() {
+    Some(body) => body,
+    None => {
+      return vec![];
+    }
+  };
+  let body = match body.as_item() {
+    Some(body) => body,
+    None => {
+      ctx.error(Error::unsupported_ref("request_body"));
+
+      return vec![];
+    }
+  };
+  let mut out = Vec::with_capacity(body.content.len());
+  for (mime, inner) in body.content.iter() {
+    let mime = match mime.as_str().try_into() {
+      Ok(v) => v,
+      Err(..) => {
+        ctx.error(Error::invalid_value("mime type", mime.to_string()));
+        continue;
+      }
+    };
+    let req = match parse_request(ctx, inner) {
+      Some(v) => v,
+      None => continue,
+    };
+    out.push((mime, req));
+  }
+
+  out
 }
 
 fn parse_code<'src>(
@@ -167,7 +172,7 @@ fn parse_code<'src>(
   match code {
     oapi3::StatusCode::Code(v) => Some(*v as usize),
     oapi3::StatusCode::Range(_) => {
-      ctx.error(Error::unsupported(ctx.scope(), "status code range"));
+      ctx.error(Error::unsupported("status code range"));
       None
     }
   }
@@ -180,36 +185,39 @@ fn parse_response<'src>(
   let res = match res.content.get("application/json") {
     Some(res) => res,
     None => {
-      ctx.error(Error::generic(
-        ctx.scope(),
-        "only `application/json` mime-type is supported",
-      ));
+      if !res.content.is_empty() {
+        ctx.error(Error::generic(
+          "only `application/json` mime-type is supported",
+        ));
+      }
       return None;
     }
   };
-  let res = ast::Response {
-    mime_type: Some("application/json".into()),
+  Some(ast::Response {
     body: res
       .schema
       .as_ref()
       .and_then(|schema| resolve_type(ctx, None, schema))
       .map(ast::Body::Typed),
-  };
-  Some(res)
+  })
 }
 
 fn parse_responses<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> ast::Responses<'src> {
+  let _scope = ctx.scope("responses");
   let default =
-    match op.responses.default.as_ref().and_then(|res| res.as_item()) {
-      Some(res) => parse_response(ctx, res),
-      None => {
-        ctx.error(Error::unsupported_ref(ctx.scope(), "responses.default"));
-        None
-      }
-    };
+    op.responses
+      .default
+      .as_ref()
+      .and_then(|res| match res.as_item() {
+        Some(res) => parse_response(ctx, res),
+        None => {
+          ctx.error(Error::unsupported_ref("default"));
+          None
+        }
+      });
   let mut specific = Vec::with_capacity(op.responses.responses.len());
   for (code, res) in op.responses.responses.iter() {
     match res.as_item() {
@@ -218,6 +226,7 @@ fn parse_responses<'src>(
           Some(c) => c,
           None => continue,
         };
+        let _scope = ctx.scope(format!("{}", code));
         let res = match parse_response(ctx, res) {
           Some(res) => res,
           None => continue,
@@ -225,7 +234,7 @@ fn parse_responses<'src>(
         specific.push((code, res));
       }
       None => {
-        ctx.error(Error::unsupported_ref(ctx.scope(), "responses"));
+        ctx.error(Error::unsupported_ref("by_code"));
       }
     }
   }
@@ -238,21 +247,21 @@ fn parse_route<'src>(
   method: ast::Method,
   op: &'src oapi3::Operation,
 ) -> Option<ast::Route<'src>> {
-  ctx.scope.push(format!("{} {}", method, uri));
+  let _scope = ctx.scope(format!("{} {}", method, uri));
   let name = parse_name(ctx, op);
   let endpoint = uri.into();
   let description = parse_desc(op);
   let parameters = parse_params(ctx, op);
-  let request = parse_request(ctx, op);
+  let request = parse_requests(ctx, op);
   let responses = parse_responses(ctx, op);
-  ctx.scope.pop();
+
   Some(ast::Route {
     name: name?,
     endpoint,
     method,
     description,
     parameters: parameters?,
-    request,
+    requests: request,
     responses,
   })
 }
@@ -336,7 +345,7 @@ fn all_of<'src>(
   if duplicates.is_empty() {
     Some(ast::Type::Object(result))
   } else {
-    ctx.error(Error::duplicate_keys(ctx.scope(), duplicates));
+    ctx.error(Error::duplicate_keys(duplicates));
     None
   }
 }
@@ -357,8 +366,8 @@ fn schema_to_type<'src>(
   name: Option<&'src str>,
   schema: &'src oapi3::Schema,
 ) -> Option<ast::Type<'src>> {
-  ctx.scope.push_opt(name);
-  let ty = match &schema.schema_kind {
+  let _scope = ctx.scope_opt(name);
+  match &schema.schema_kind {
     oapi3::SchemaKind::Type(ty) => match ty {
       oapi3::Type::String(str) => Some(string_type(ctx, str)),
       oapi3::Type::Number(_) => Some(ast::Type::Number),
@@ -370,17 +379,15 @@ fn schema_to_type<'src>(
     oapi3::SchemaKind::OneOf { one_of: values } => one_of(ctx, &values[..]),
     oapi3::SchemaKind::AllOf { all_of: values } => all_of(ctx, &values[..]),
     oapi3::SchemaKind::AnyOf { .. } => {
-      ctx.error(Error::unsupported(ctx.scope(), "any_of"));
+      ctx.error(Error::unsupported("any_of"));
       Some(ast::Type::Any)
     }
     oapi3::SchemaKind::Not { .. } => {
-      ctx.error(Error::unsupported(ctx.scope(), "not"));
+      ctx.error(Error::unsupported("not"));
       Some(ast::Type::Any)
     }
     oapi3::SchemaKind::Any(..) => Some(ast::Type::Any),
-  };
-  ctx.scope.pop();
-  ty
+  }
 }
 
 fn insert_unique<'src>(
@@ -424,7 +431,7 @@ fn resolve_reference<'src>(
         }
       }
 
-      ctx.error(Error::unresolved_ref(ctx.scope(), name.to_string()));
+      ctx.error(Error::unresolved_ref(name.to_string()));
       None
     }
   }
@@ -457,11 +464,10 @@ fn resolve_type_boxed<'src>(
 
 fn parse_types(ctx: &mut Context<'_>) {
   if let Some(components) = ctx.components {
-    ctx.scope.push("components");
+    let _scope = ctx.scope("components");
     for (name, schema) in components.schemas.iter() {
       resolve_type(ctx, Some(name.as_str()), schema);
     }
-    ctx.scope.pop();
   }
 }
 
