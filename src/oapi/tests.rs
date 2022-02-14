@@ -61,7 +61,7 @@ try_parse_api!(scheduler, "./scheduler.json");
 try_parse_api!(sync_actions, "./sync-actions.json");
 
 //#[test]
-fn parse_and_compare() -> Result<()> {
+/* fn parse_and_compare() -> Result<()> {
   use ast::Type::*;
   match serde_oapi!("./sync-actions.json")?.as_ast() {
     Ok(ast) => {
@@ -172,4 +172,4 @@ fn parse_and_compare() -> Result<()> {
   };
 
   Ok(())
-}
+} */

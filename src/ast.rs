@@ -12,6 +12,8 @@ pub type Types<'src> = HashMap<Cow<'src, str>, Type<'src>>;
 pub struct Ast<'src> {
   pub routes: Vec<Route<'src>>,
   pub types: Types<'src>,
+  /// Default security scheme
+  pub security: Option<Security<'src>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +25,7 @@ pub struct Route<'src> {
   pub parameters: Parameters<'src>,
   pub requests: Requests<'src>,
   pub responses: Responses<'src>,
+  pub security: Option<Security<'src>>,
 }
 
 pub type Parameters<'src> = HashMap<Cow<'src, str>, Parameter<'src>>;
@@ -67,6 +70,14 @@ pub struct Responses<'src> {
 pub struct Response<'src> {
   pub body: Option<Body<'src>>,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Security<'src> {
+  pub name: Cow<'src, str>,
+  pub key: Cow<'src, str>,
+}
+
+pub type SecuritySchemes<'src> = HashMap<Cow<'src, str>, Security<'src>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Body<'src> {

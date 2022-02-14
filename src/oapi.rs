@@ -2,6 +2,7 @@ pub mod error;
 
 use self::error::{Error, ErrorKind, Scope};
 use crate::{ast, util};
+use indexmap::IndexMap;
 use openapiv3 as oapi3;
 use std::{borrow::Cow, collections::HashMap};
 
@@ -12,6 +13,7 @@ struct Context<'src> {
   errors: Vec<Error>,
   can_insert: bool,
   types: ast::Types<'src>,
+  security: ast::SecuritySchemes<'src>,
   components: Option<&'src oapi3::Components>,
 }
 
@@ -22,6 +24,7 @@ impl<'src> Context<'src> {
       errors: vec![],
       can_insert: false,
       types: ast::Types::default(),
+      security: ast::SecuritySchemes::default(),
       components,
     }
   }
@@ -41,12 +44,12 @@ impl<'src> Context<'src> {
   }
 }
 
-fn parse_name<'src>(
+fn op_parse_name<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> Option<Cow<'src, str>> {
   let _scope = ctx.scope("name");
-  match op.summary.as_ref().or_else(|| op.operation_id.as_ref()) {
+  match op.summary.as_ref().or(op.operation_id.as_ref()) {
     Some(v) => Some(util::to_camel_case(v).into()),
     None => {
       ctx.error(Error::required_field_or("summary", "operation_id"));
@@ -55,14 +58,14 @@ fn parse_name<'src>(
   }
 }
 
-fn parse_desc(op: &oapi3::Operation) -> Option<Cow<'_, str>> {
+fn op_parse_desc(op: &oapi3::Operation) -> Option<Cow<'_, str>> {
   op.description
     .as_ref()
     .map(util::trim_in_place)
     .map(Cow::from)
 }
 
-fn parse_params<'src>(
+fn op_parse_params<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> Option<ast::Parameters<'src>> {
@@ -102,7 +105,7 @@ fn parse_params<'src>(
         ty: if data.required {
           ty
         } else {
-          ast::Type::Optional(box ty)
+          ast::Type::Optional(Box::new(ty))
         },
       };
       params.insert(data.name.as_str().into(), param);
@@ -127,7 +130,7 @@ fn parse_request<'src>(
     })
 }
 
-fn parse_requests<'src>(
+fn op_parse_requests<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> ast::Requests<'src> {
@@ -202,7 +205,7 @@ fn parse_response<'src>(
   })
 }
 
-fn parse_responses<'src>(
+fn op_parse_responses<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
 ) -> ast::Responses<'src> {
@@ -241,6 +244,35 @@ fn parse_responses<'src>(
   ast::Responses { default, specific }
 }
 
+fn parse_security<'src>(
+  ctx: &mut Context<'src>,
+  security: &[IndexMap<String, Vec<String>>],
+) -> Option<ast::Security<'src>> {
+  for supported_schemes in security.iter() {
+    for (name, _) in supported_schemes.iter() {
+      if let Some(scheme) = ctx.security.get(name.as_str()) {
+        return Some(scheme.clone());
+      } else {
+        ctx.error(Error::generic(format!("unknown security schema {name}")));
+      }
+    }
+  }
+  None
+}
+
+fn op_parse_security<'src>(
+  ctx: &mut Context<'src>,
+  op: &'src oapi3::Operation,
+) -> Option<ast::Security<'src>> {
+  let _scope = ctx.scope("security");
+  println!("security {:#?}", op.security);
+  if let Some(security) = &op.security {
+    parse_security(ctx, security)
+  } else {
+    None
+  }
+}
+
 fn parse_route<'src>(
   ctx: &mut Context<'src>,
   uri: &'src str,
@@ -248,12 +280,13 @@ fn parse_route<'src>(
   op: &'src oapi3::Operation,
 ) -> Option<ast::Route<'src>> {
   let _scope = ctx.scope(format!("{} {}", method, uri));
-  let name = parse_name(ctx, op);
+  let name = op_parse_name(ctx, op);
   let endpoint = uri.into();
-  let description = parse_desc(op);
-  let parameters = parse_params(ctx, op);
-  let request = parse_requests(ctx, op);
-  let responses = parse_responses(ctx, op);
+  let description = op_parse_desc(op);
+  let parameters = op_parse_params(ctx, op);
+  let request = op_parse_requests(ctx, op);
+  let responses = op_parse_responses(ctx, op);
+  let security = op_parse_security(ctx, op);
 
   Some(ast::Route {
     name: name?,
@@ -263,6 +296,7 @@ fn parse_route<'src>(
     parameters: parameters?,
     requests: request,
     responses,
+    security,
   })
 }
 
@@ -310,7 +344,7 @@ fn object_type<'src>(
       if obj.required.contains(key) {
         ty
       } else {
-        ast::Type::Optional(box ty)
+        ast::Type::Optional(Box::new(ty))
       },
     );
   }
@@ -354,11 +388,11 @@ fn array_type<'src>(
   ctx: &mut Context<'src>,
   arr: &'src oapi3::ArrayType,
 ) -> Option<ast::Type<'src>> {
-  Some(ast::Type::Array(box resolve_type_boxed(
+  Some(ast::Type::Array(Box::new(resolve_type_boxed(
     ctx,
     None,
     arr.items.as_ref()?,
-  )?))
+  )?)))
 }
 
 fn schema_to_type<'src>(
@@ -457,7 +491,7 @@ fn resolve_type_boxed<'src>(
 ) -> Option<ast::Type<'src>> {
   use oapi3::ReferenceOr::*;
   match schema {
-    Item(box schema) => resolve_item(ctx, name, schema),
+    Item(schema) => resolve_item(ctx, name, &*schema),
     Reference { reference } => resolve_reference(ctx, reference.as_str()),
   }
 }
@@ -471,10 +505,62 @@ fn parse_types(ctx: &mut Context<'_>) {
   }
 }
 
+fn parse_security_schemes(ctx: &mut Context<'_>) {
+  if let Some(components) = ctx.components {
+    let _scope = ctx.scope("components");
+    for (name, scheme) in components.security_schemes.iter() {
+      match scheme {
+        oapi3::ReferenceOr::Reference { .. } => {
+          ctx.error(Error::unsupported_ref("securitySchemes"));
+        }
+        oapi3::ReferenceOr::Item(scheme) => match scheme {
+          oapi3::SecurityScheme::APIKey {
+            location,
+            name: key,
+            ..
+          } => match location {
+            oapi3::APIKeyLocation::Header => {
+              ctx.security.insert(
+                name.clone().into(),
+                ast::Security {
+                  name: name.clone().into(),
+                  key: key.clone().into(),
+                },
+              );
+            }
+            oapi3::APIKeyLocation::Query => {
+              ctx.error(Error::unsupported("Query API key authentication"));
+            }
+            oapi3::APIKeyLocation::Cookie => {
+              ctx.error(Error::unsupported("Cookie API key authentication"));
+            }
+          },
+          oapi3::SecurityScheme::HTTP { .. } => {
+            ctx.error(Error::unsupported("HTTP authentication"));
+          }
+          oapi3::SecurityScheme::OAuth2 { .. } => {
+            ctx.error(Error::unsupported("OAuth2 authentication"));
+          }
+          oapi3::SecurityScheme::OpenIDConnect { .. } => {
+            ctx.error(Error::unsupported("OpenID authentication"));
+          }
+        },
+      }
+    }
+  }
+}
+
 impl ast::AsAst for oapi3::OpenAPI {
   type Error = Error;
   fn as_ast(&self) -> Result<ast::Ast<'_>, (ast::Ast<'_>, Vec<self::Error>)> {
     let mut ctx = Context::new(self.components.as_ref());
+
+    parse_security_schemes(&mut ctx);
+    let security = self
+      .security
+      .as_ref()
+      .and_then(|v| parse_security(&mut ctx, v));
+
     ctx.can_insert = true;
     parse_types(&mut ctx);
     ctx.can_insert = false;
@@ -493,6 +579,7 @@ impl ast::AsAst for oapi3::OpenAPI {
     let ast = ast::Ast {
       routes,
       types: ctx.types,
+      security,
     };
     if ctx.errors.is_empty() {
       Ok(ast)
