@@ -265,7 +265,6 @@ fn op_parse_security<'src>(
   op: &'src oapi3::Operation,
 ) -> Option<ast::Security<'src>> {
   let _scope = ctx.scope("security");
-  println!("security {:#?}", op.security);
   if let Some(security) = &op.security {
     parse_security(ctx, security)
   } else {
