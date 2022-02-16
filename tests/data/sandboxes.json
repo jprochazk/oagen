@@ -1,0 +1,601 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Keboola Sandboxes",
+    "contact": { "email": "devel@keboola.com" },
+    "license": { "name": "MIT", "url": "https://opensource.org/licenses/MIT" },
+    "description": "CRUD API for Sandboxes Provisioning\n## Pagination\nListing calls can be paginated using next page token. In that case, a link to the next page will be sent in `Link` response header with `rel=\"next\"`.\n"
+  },
+  "servers": [
+    { "description": "US East", "url": "https://sandboxes.keboola.com/" },
+    { "description": "EU Central", "url": "https://sandboxes.eu-central-1.keboola.com/" },
+    { "description": "North Europe", "url": "https://sandboxes.north-europe.azure.keboola.com/" }
+  ],
+  "paths": {
+    "/sandboxes": {
+      "post": {
+        "summary": "Create sandbox",
+        "operationId": "createSandbox",
+        "tags": ["sandboxes"],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxCreateBody" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      },
+      "get": {
+        "summary": "List sandboxes",
+        "operationId": "listSandboxes",
+        "tags": ["sandboxes"],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SandboxResponse" } }
+              }
+            }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/sandboxes/{id}": {
+      "get": {
+        "summary": "Get sandbox",
+        "operationId": "getSandbox",
+        "tags": ["sandboxes"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      },
+      "patch": {
+        "summary": "Update sandbox",
+        "operationId": "updateSandbox",
+        "tags": ["sandboxes"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxUpdateBody" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      },
+      "delete": {
+        "summary": "Delete sandbox",
+        "operationId": "deleteSandbox",
+        "tags": ["sandboxes"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/sandboxes/{id}/deactivate": {
+      "post": {
+        "summary": "Deactivate sandbox",
+        "operationId": "deactivateSandbox",
+        "tags": ["sandboxes"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/sandboxes/{id}/activate": {
+      "post": {
+        "summary": "Activate sandbox",
+        "operationId": "activateSandbox",
+        "tags": ["sandboxes"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/manage/list/expired": {
+      "get": {
+        "summary": "List expired sandboxes",
+        "operationId": "manageListExpiredSandboxes",
+        "tags": ["management"],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SandboxResponse" } }
+              }
+            }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      }
+    },
+    "/manage/{id}": {
+      "get": {
+        "summary": "Get sandbox",
+        "operationId": "manageGetSandbox",
+        "tags": ["management"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      },
+      "patch": {
+        "summary": "Update sandbox",
+        "operationId": "manageUpdateSandbox",
+        "tags": ["management"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxUpdateBody" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      },
+      "delete": {
+        "summary": "Delete sandbox",
+        "operationId": "manageDeleteSandbox",
+        "tags": ["management"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      }
+    },
+    "/manage/{id}/deactivate": {
+      "post": {
+        "summary": "Deactivate sandbox",
+        "operationId": "manageDeactivateSandbox",
+        "tags": ["management"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SandboxResponse" } } }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      }
+    },
+    "/manage/projects/{id}": {
+      "get": {
+        "summary": "Get project",
+        "operationId": "manageGetProject",
+        "tags": ["management"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProjectResponse" } } }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      },
+      "patch": {
+        "summary": "Update project",
+        "operationId": "updateProject",
+        "tags": ["management"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "type": "object", "properties": { "mlflowUri": { "type": "string" } } } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProjectResponse" } } }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      }
+    },
+    "/manage/projects/{id}/sandboxes": {
+      "get": {
+        "summary": "List project sandboxes",
+        "operationId": "managelistSandboxesForProject",
+        "tags": ["management"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SandboxResponse" } }
+              }
+            }
+          }
+        },
+        "security": [{ "ManageApiToken": [] }]
+      }
+    },
+    "/projects/current": {
+      "get": {
+        "summary": "Get project",
+        "operationId": "getProject",
+        "tags": ["projects"],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProjectResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/ml/models": {
+      "get": {
+        "summary": "List ML Models",
+        "operationId": "listMLModels",
+        "tags": ["ml models"],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MLModelResponse" } }
+              }
+            }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/ml/models/{name}/versions/{version}": {
+      "patch": {
+        "summary": "Update ML Model Version",
+        "operationId": "updateMLModelVersion",
+        "tags": ["ml models"],
+        "parameters": [
+          { "name": "name", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "version", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "description": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MLModelResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/ml/deployments": {
+      "get": {
+        "summary": "List ML Deployments",
+        "operationId": "listMLDeployments",
+        "tags": ["ml deployments"],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MLDeploymentResponse" } }
+              }
+            }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      },
+      "post": {
+        "summary": "Create ML Deployment",
+        "operationId": "createMLDeployment",
+        "tags": ["ml deployments"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "modelName": { "type": "string" },
+                  "modelVersion": { "type": "string" },
+                  "url": { "type": "string" },
+                  "error": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MLDeploymentResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/ml/deployments/{id}": {
+      "patch": {
+        "summary": "Update ML Deployment",
+        "operationId": "updateMLDeployment",
+        "tags": ["ml deployments"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "modelName": { "type": "string" },
+                  "modelVersion": { "type": "string" },
+                  "url": { "type": "string" },
+                  "error": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MLDeploymentResponse" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      },
+      "delete": {
+        "summary": "Delete ML Deployment",
+        "operationId": "deleteMLDeployment",
+        "tags": ["ml deployments"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "successful operation" } },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/ml/deployments/{id}/linkedConfigurations": {
+      "post": {
+        "summary": "Link ML Deployment to a configuration",
+        "operationId": "linkMLDeploymentToConfiguration",
+        "tags": ["ml deployments"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "componentId": { "type": "string" }, "configurationId": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "204": { "description": "successful operation" } },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/ml/deployments/{id}/linkedConfigurations/{componentId}/{configurationId}": {
+      "delete": {
+        "summary": "Remove link of ML Deployment to a configuration",
+        "operationId": "removeLinkMLDeploymentToConfiguration",
+        "tags": ["ml deployments"],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "componentId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "configurationId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "204": { "description": "successful operation" } },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    },
+    "/ml/deployments/{id}/test": {
+      "post": {
+        "summary": "Test Run of ML Deployment",
+        "operationId": "testMLflowDeployment",
+        "tags": ["ml deployments"],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        },
+        "security": [{ "StorageApiToken": [] }]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "StorageApiToken": { "type": "apiKey", "in": "header", "name": "X-StorageApi-Token" },
+      "ManageApiToken": { "type": "apiKey", "in": "header", "name": "X-KBC-ManageApiToken" }
+    },
+    "schemas": {
+      "ProjectResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "mlflowUri": { "type": "string" },
+          "mlflowAbsSas": { "type": "string" },
+          "mlflowAbsConnectionString": { "type": "string" },
+          "createdTimestamp": { "type": "string" },
+          "updatedTimestamp": { "type": "string" }
+        }
+      },
+      "SandboxDatabricksDetails": {
+        "type": "object",
+        "properties": {
+          "nodeType": { "type": "string" },
+          "sparkVersion": { "type": "string" },
+          "numberOfNodes": { "type": "integer" },
+          "clusterId": { "type": "string" }
+        }
+      },
+      "SandboxSize": { "type": "string", "default": "small", "enum": ["small", "medium", "large"] },
+      "SandboxType": {
+        "type": "string",
+        "enum": [
+          "exasol",
+          "julia",
+          "python",
+          "python-databricks",
+          "python-mlflow",
+          "r",
+          "redshift",
+          "snowflake",
+          "synapse",
+          "test"
+        ]
+      },
+      "SandboxWorkspaceDetails": {
+        "type": "object",
+        "properties": {
+          "connection": {
+            "type": "object",
+            "properties": {
+              "schema": { "type": "string" },
+              "database": { "type": "string" },
+              "warehouse": { "type": "string" }
+            }
+          }
+        }
+      },
+      "SandboxPersistentStorage": {
+        "type": "object",
+        "properties": { "pvcName": { "type": "string" }, "k8sManifest": { "type": "string" } }
+      },
+      "SandboxUpdateBody": {
+        "type": "object",
+        "properties": {
+          "configurationId": { "type": "string" },
+          "physicalId": { "type": "string" },
+          "type": { "$ref": "#/components/schemas/SandboxType" },
+          "size": { "$ref": "#/components/schemas/SandboxSize" },
+          "user": { "type": "string" },
+          "password": { "type": "string" },
+          "host": { "type": "string" },
+          "url": { "type": "string" },
+          "imageVersion": { "type": "string" },
+          "stagingWorkspaceId": { "type": "string" },
+          "shared": { "type": "boolean", "default": false },
+          "autosaveTokenId": { "type": "string" },
+          "active": { "type": "boolean", "default": true },
+          "expirationTimestamp": { "type": "string" },
+          "lastAutosaveTimestamp": { "type": "string" },
+          "expirationAfterHours": { "type": "integer" },
+          "packages": { "type": "array", "items": { "type": "string" } },
+          "workspaceDetails": { "$ref": "#/components/schemas/SandboxWorkspaceDetails" },
+          "databricks": { "$ref": "#/components/schemas/SandboxDatabricksDetails" },
+          "persistentStorage": { "$ref": "#/components/schemas/SandboxPersistentStorage" }
+        }
+      },
+      "SandboxCreateBody": {
+        "allOf": [
+          { "$ref": "#/components/schemas/SandboxUpdateBody" },
+          { "type": "object", "required": ["configurationId", "physicalId", "type", "password", "host"] }
+        ]
+      },
+      "SandboxResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "projectId": { "type": "string" },
+          "tokenId": { "type": "string" },
+          "configurationId": { "type": "string" },
+          "physicalId": { "type": "string" },
+          "type": { "$ref": "#/components/schemas/SandboxType" },
+          "size": { "$ref": "#/components/schemas/SandboxSize" },
+          "user": { "type": "string" },
+          "password": { "type": "string" },
+          "host": { "type": "string" },
+          "url": { "type": "string" },
+          "imageVersion": { "type": "string" },
+          "stagingWorkspaceId": { "type": "string" },
+          "shared": { "type": "boolean", "default": false },
+          "autosaveTokenId": { "type": "string" },
+          "active": { "type": "boolean", "default": true },
+          "createdTimestamp": { "type": "string" },
+          "updatedTimestamp": { "type": "string" },
+          "expirationTimestamp": { "type": "string" },
+          "lastAutosaveTimestamp": { "type": "string" },
+          "expirationAfterHours": { "type": "integer" },
+          "deletedTimestamp": { "type": "string" },
+          "packages": { "type": "array", "items": { "type": "string" } },
+          "workspaceDetails": { "$ref": "#/components/schemas/SandboxWorkspaceDetails" },
+          "databricks": { "$ref": "#/components/schemas/SandboxDatabricksDetails" },
+          "persistentStorage": { "$ref": "#/components/schemas/SandboxPersistentStorage" }
+        }
+      },
+      "MLDeploymentResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "modelName": { "type": "string" },
+          "modelVersion": { "type": "string" },
+          "url": { "type": "string" },
+          "error": { "type": "string" },
+          "projectId": { "type": "string" },
+          "tokenId": { "type": "string" },
+          "createdTimestamp": { "type": "string" },
+          "updatedTimestamp": { "type": "string" },
+          "linkedConfigurations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "componentId": { "type": "string" }, "configurationId": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "MLModelResponse": {
+        "type": "object",
+        "properties": {
+          "deployment": { "$ref": "#/components/schemas/MLDeploymentResponse" },
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "stage": { "type": "string" },
+          "description": { "type": "string" },
+          "author": { "type": "string" },
+          "artifactUrl": {
+            "type": "string",
+            "example": "wasbs://project-server-1268@kbcmlflowhc7chguaeh2km.blob.core.windows.net/2/6466/artifacts/model"
+          }
+        }
+      }
+    }
+  }
+}

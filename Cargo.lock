@@ -18,19 +18,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94a45b455c14666b85fc40a019e8ab9eb75e3a124e05494f5397122bc9eb06e0"
 
 [[package]]
-name = "api-type-gen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "indexmap",
- "openapiv3",
- "pretty_assertions",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -191,6 +178,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "ts_api_gen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "openapiv3",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
