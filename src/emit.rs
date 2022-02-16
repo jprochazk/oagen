@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::ast;
+use crate::{ast, util::trim_in_place};
 
 pub enum Token<'src> {
   /// |
@@ -150,15 +150,21 @@ impl<'src> Buffer<'src> {
   }
 }
 
+pub fn emit<'src>(input: impl Emit<'src>) -> String {
+  let mut buffer = Buffer::new();
+  input.emit(&mut buffer);
+  trim_in_place(buffer)
+}
+
 pub trait Emit<'src> {
   fn emit(self, buffer: &mut Buffer<'src>);
 }
 
 impl<'src> Emit<'src> for ast::Ast<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
-    self.schemes.emit(buffer);
+    //self.schemes.emit(buffer);
     self.types.emit(buffer);
-    self.routes.emit(buffer);
+    //self.routes.emit(buffer);
   }
 }
 
