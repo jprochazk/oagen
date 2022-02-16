@@ -4,7 +4,7 @@ use self::error::{Error, ErrorKind, Scope};
 use crate::{ast, util};
 use indexmap::IndexMap;
 use openapiv3 as oapi3;
-use std::{borrow::Cow, collections::HashMap};
+use std::borrow::Cow;
 
 // TODO: parse security
 
@@ -105,7 +105,7 @@ fn op_parse_params<'src>(
         ty: if data.required {
           ty
         } else {
-          ast::Type::Optional(Box::new(ty))
+          ast::Type::Optional(box ty)
         },
       };
       params.insert(data.name.as_str().into(), param);
@@ -315,6 +315,7 @@ fn one_of<'src>(
   Some(ast::Type::Union(parts))
 }
 
+// NOTE: only string enums are supported
 fn string_type<'src>(
   _ctx: &mut Context<'src>,
   str: &'src oapi3::StringType,
@@ -336,7 +337,7 @@ fn object_type<'src>(
   ctx: &mut Context<'src>,
   obj: &'src oapi3::ObjectType,
 ) -> Option<ast::Type<'src>> {
-  let mut props = HashMap::with_capacity(obj.properties.len());
+  let mut props = IndexMap::with_capacity(obj.properties.len());
   for (key, schema) in obj.properties.iter() {
     let ty = resolve_type_boxed(ctx, None, schema)?;
     props.insert(
@@ -344,7 +345,7 @@ fn object_type<'src>(
       if obj.required.contains(key) {
         ty
       } else {
-        ast::Type::Optional(Box::new(ty))
+        ast::Type::Optional(box ty)
       },
     );
   }
@@ -359,7 +360,7 @@ fn all_of<'src>(
   ctx: &mut Context<'src>,
   all_of: &'src [oapi3::ReferenceOr<oapi3::Schema>],
 ) -> Option<ast::Type<'src>> {
-  let mut result = HashMap::new();
+  let mut result = IndexMap::new();
   let mut duplicates = vec![];
   for schema in all_of {
     match resolve_type(ctx, None, schema) {
@@ -388,11 +389,11 @@ fn array_type<'src>(
   ctx: &mut Context<'src>,
   arr: &'src oapi3::ArrayType,
 ) -> Option<ast::Type<'src>> {
-  Some(ast::Type::Array(Box::new(resolve_type_boxed(
+  Some(ast::Type::Array(box resolve_type_boxed(
     ctx,
     None,
     arr.items.as_ref()?,
-  )?)))
+  )?))
 }
 
 fn schema_to_type<'src>(
@@ -491,7 +492,7 @@ fn resolve_type_boxed<'src>(
 ) -> Option<ast::Type<'src>> {
   use oapi3::ReferenceOr::*;
   match schema {
-    Item(schema) => resolve_item(ctx, name, &*schema),
+    Item(box schema) => resolve_item(ctx, name, schema),
     Reference { reference } => resolve_reference(ctx, reference.as_str()),
   }
 }
@@ -579,6 +580,7 @@ impl ast::AsAst for oapi3::OpenAPI {
     let ast = ast::Ast {
       routes,
       types: ctx.types,
+      schemes: ctx.security,
       security,
     };
     if ctx.errors.is_empty() {

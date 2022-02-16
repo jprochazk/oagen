@@ -1,17 +1,19 @@
+use indexmap::IndexMap;
 use std::borrow::Cow;
-use std::collections::HashMap;
 
 pub trait AsAst {
   type Error;
   fn as_ast(&self) -> Result<Ast<'_>, (Ast<'_>, Vec<Self::Error>)>;
 }
 
-pub type Types<'src> = HashMap<Cow<'src, str>, Type<'src>>;
+pub type Routes<'src> = Vec<Route<'src>>;
+pub type Types<'src> = IndexMap<Cow<'src, str>, Type<'src>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ast<'src> {
-  pub routes: Vec<Route<'src>>,
+  pub routes: Routes<'src>,
   pub types: Types<'src>,
+  pub schemes: SecuritySchemes<'src>,
   /// Default security scheme
   pub security: Option<Security<'src>>,
 }
@@ -28,7 +30,7 @@ pub struct Route<'src> {
   pub security: Option<Security<'src>>,
 }
 
-pub type Parameters<'src> = HashMap<Cow<'src, str>, Parameter<'src>>;
+pub type Parameters<'src> = IndexMap<Cow<'src, str>, Parameter<'src>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameter<'src> {
@@ -77,7 +79,7 @@ pub struct Security<'src> {
   pub key: Cow<'src, str>,
 }
 
-pub type SecuritySchemes<'src> = HashMap<Cow<'src, str>, Security<'src>>;
+pub type SecuritySchemes<'src> = IndexMap<Cow<'src, str>, Security<'src>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Body<'src> {
@@ -93,7 +95,7 @@ pub enum Type<'src> {
   Boolean,
   Enum(Vec<Cow<'src, str>>),
   Array(Box<Type<'src>>),
-  Object(HashMap<Cow<'src, str>, Type<'src>>),
+  Object(IndexMap<Cow<'src, str>, Type<'src>>),
   Union(Vec<Type<'src>>),
   Optional(Box<Type<'src>>),
 }

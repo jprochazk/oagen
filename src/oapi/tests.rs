@@ -1,6 +1,6 @@
 use anyhow::Result;
+use indexmap::IndexMap;
 use pretty_assertions::assert_eq;
-use std::collections::HashMap;
 
 use crate::ast::{
   self, AsAst, Body, Index, Method, MimeType, Parameter, ParameterKind,
@@ -13,7 +13,7 @@ macro_rules! serde_oapi {
   };
 }
 
-fn map_match<K, V, S>(a: &HashMap<K, V, S>, b: &HashMap<K, V, S>) -> bool
+fn map_match<K, V, S>(a: &IndexMap<K, V, S>, b: &IndexMap<K, V, S>) -> bool
 where
   K: std::cmp::Eq,
   K: std::hash::Hash,

@@ -5,7 +5,7 @@ macro_rules! map {
       $(
         ($key.into(), $value)
       ),*
-    ].into_iter().collect::<std::collections::HashMap<_,_,_>>()
+    ].into_iter().collect::<indexmap::IndexMap<_,_,_>>()
   }
 }
 
