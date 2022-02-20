@@ -21,3 +21,4 @@ macro_rules! try_parse_and_emit {
 }
 
 try_parse_and_emit!(job_queue, "./data/job-queue.json");
+try_parse_and_emit!(sandboxes, "./data/sandboxes.json");

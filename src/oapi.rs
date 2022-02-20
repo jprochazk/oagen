@@ -85,19 +85,16 @@ fn op_parse_params<'src>(
           return None;
         }
       };
-      let ty = match resolve_type(
+      let ty = resolve_type(
         ctx,
         Some(data.name.as_str()),
         match data.format {
           oapi3::ParameterSchemaOrContent::Schema(ref s) => s,
-          oapi3::ParameterSchemaOrContent::Content(_) => todo!(),
+          oapi3::ParameterSchemaOrContent::Content(_) => {
+            return None;
+          }
         },
-      ) {
-        Some(ty) => ty,
-        None => {
-          return None;
-        }
-      };
+      )?;
       let param = ast::Parameter {
         name: data.name.as_str().into(),
         description: data.description.as_ref().map(|v| v.as_str().into()),
@@ -105,7 +102,7 @@ fn op_parse_params<'src>(
         ty: if data.required {
           ty
         } else {
-          ast::Type::Optional(box ty)
+          ast::TypeRef::Type(ast::Type::Optional(box ty))
         },
       };
       params.insert(data.name.as_str().into(), param);
@@ -344,7 +341,7 @@ fn object_type<'src>(
       if obj.required.contains(key) {
         ty
       } else {
-        ast::Type::Optional(box ty)
+        ast::TypeRef::Type(ast::Type::Optional(box ty))
       },
     );
   }
@@ -362,7 +359,7 @@ fn all_of<'src>(
   let mut result = IndexMap::new();
   let mut duplicates = vec![];
   for schema in all_of {
-    match resolve_type(ctx, None, schema) {
+    match resolve_type(ctx, None, schema).and_then(|r| r.into_type()) {
       Some(ast::Type::Object(fields)) => {
         for (key, value) in fields.iter() {
           if result.contains_key(key) {
@@ -372,6 +369,7 @@ fn all_of<'src>(
           }
         }
       }
+      // TODO: some kind of error here
       _ => break,
     }
   }
@@ -424,50 +422,39 @@ fn schema_to_type<'src>(
   }
 }
 
-fn insert_unique<'src>(
-  types: &mut ast::Types<'src>,
-  name: Option<&'src str>,
-  ty: Option<&ast::Type<'src>>,
-) -> Option<()> {
-  let name = name?;
-  let ty = ty?;
-  if !types.contains_key(name) {
-    types.insert(name.into(), ty.clone());
-  }
-  Some(())
-}
-
 fn resolve_item<'src>(
   ctx: &mut Context<'src>,
   name: Option<&'src str>,
   schema: &'src oapi3::Schema,
-) -> Option<ast::Type<'src>> {
-  let ty = schema_to_type(ctx, name, schema);
+) -> Option<ast::TypeRef<'src>> {
+  let ty = schema_to_type(ctx, name, schema)?;
   if ctx.can_insert {
-    insert_unique(&mut ctx.types, name, ty.as_ref());
+    if let Some(name) = name {
+      if !ctx.types.contains_key(name) {
+        ctx.types.insert(name.into(), ty.clone());
+      }
+    }
   }
-  ty
+  Some(ast::TypeRef::Type(ty))
 }
 
 fn resolve_reference<'src>(
   ctx: &mut Context<'src>,
   name: &'src str,
-) -> Option<ast::Type<'src>> {
+) -> Option<ast::TypeRef<'src>> {
   let name = name.split('/').last().unwrap_or(name);
-  match ctx.types.get(name).cloned() {
-    Some(v) => Some(v),
-    None => {
-      if ctx.can_insert {
-        if let Some(components) = ctx.components {
-          if let Some(schema) = components.schemas.get(name) {
-            return resolve_type(ctx, Some(name), schema);
-          }
+  if !ctx.types.contains_key(name) {
+    if ctx.can_insert {
+      if let Some(components) = ctx.components {
+        if let Some(schema) = components.schemas.get(name) {
+          return resolve_type(ctx, Some(name), schema);
         }
       }
-
-      ctx.error(Error::unresolved_ref(name.to_string()));
-      None
     }
+    ctx.error(Error::unresolved_ref(name.to_string()));
+    None
+  } else {
+    Some(ast::TypeRef::Ref(name.into()))
   }
 }
 
@@ -476,7 +463,7 @@ fn resolve_type<'src>(
   ctx: &mut Context<'src>,
   name: Option<&'src str>,
   schema: &'src oapi3::ReferenceOr<oapi3::Schema>,
-) -> Option<ast::Type<'src>> {
+) -> Option<ast::TypeRef<'src>> {
   use oapi3::ReferenceOr::*;
   match schema {
     Item(schema) => resolve_item(ctx, name, schema),
@@ -488,7 +475,7 @@ fn resolve_type_boxed<'src>(
   ctx: &mut Context<'src>,
   name: Option<&'src str>,
   schema: &'src oapi3::ReferenceOr<Box<oapi3::Schema>>,
-) -> Option<ast::Type<'src>> {
+) -> Option<ast::TypeRef<'src>> {
   use oapi3::ReferenceOr::*;
   match schema {
     Item(box schema) => resolve_item(ctx, name, schema),

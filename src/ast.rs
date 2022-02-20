@@ -6,9 +6,6 @@ pub trait AsAst {
   fn as_ast(&self) -> Result<Ast<'_>, (Ast<'_>, Vec<Self::Error>)>;
 }
 
-pub type Routes<'src> = Vec<Route<'src>>;
-pub type Types<'src> = IndexMap<Cow<'src, str>, Type<'src>>;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ast<'src> {
   pub routes: Routes<'src>,
@@ -17,6 +14,8 @@ pub struct Ast<'src> {
   /// Default security scheme
   pub security: Option<Security<'src>>,
 }
+
+pub type Routes<'src> = Vec<Route<'src>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Route<'src> {
@@ -37,7 +36,7 @@ pub struct Parameter<'src> {
   pub name: Cow<'src, str>,
   pub description: Option<Cow<'src, str>>,
   pub kind: ParameterKind,
-  pub ty: Type<'src>,
+  pub ty: TypeRef<'src>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -84,7 +83,31 @@ pub type SecuritySchemes<'src> = IndexMap<Cow<'src, str>, Security<'src>>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Body<'src> {
   Untyped(Cow<'src, str>),
-  Typed(Type<'src>),
+  Typed(TypeRef<'src>),
+}
+
+pub type Types<'src> = IndexMap<Cow<'src, str>, Type<'src>>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeRef<'src> {
+  Type(Type<'src>),
+  Ref(Cow<'src, str>),
+}
+
+impl<'src> TypeRef<'src> {
+  pub fn into_type(self) -> Option<Type<'src>> {
+    match self {
+      TypeRef::Type(ty) => Some(ty),
+      TypeRef::Ref(_) => None,
+    }
+  }
+
+  pub fn into_name(self) -> Option<Cow<'src, str>> {
+    match self {
+      TypeRef::Type(_) => None,
+      TypeRef::Ref(name) => Some(name),
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -94,10 +117,10 @@ pub enum Type<'src> {
   String,
   Boolean,
   Enum(Vec<Cow<'src, str>>),
-  Array(Box<Type<'src>>),
-  Object(IndexMap<Cow<'src, str>, Type<'src>>),
-  Union(Vec<Type<'src>>),
-  Optional(Box<Type<'src>>),
+  Array(Box<TypeRef<'src>>),
+  Object(IndexMap<Cow<'src, str>, TypeRef<'src>>),
+  Union(Vec<TypeRef<'src>>),
+  Optional(Box<TypeRef<'src>>),
 }
 
 #[derive(Clone, Copy, PartialEq)]
