@@ -572,6 +572,3 @@ impl ast::AsAst for oapi3::OpenAPI {
     }
   }
 }
-
-#[cfg(test)]
-mod tests;

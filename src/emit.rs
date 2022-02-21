@@ -72,7 +72,14 @@ impl<'src> std::fmt::Display for Token<'src> {
       Token::GreaterThan => write!(f, ">"),
       Token::Identifier(i) => write!(f, "{i}"),
       Token::String(s) => write!(f, "'{s}'"),
-      Token::Doc(d) => write!(f, "\n/** {d} */\n"),
+      Token::Doc(d) => {
+        writeln!(f, "\n/**")?;
+        for line in d.split('\n') {
+          writeln!(f, " * {line}")?;
+        }
+        writeln!(f, "*/")?;
+        Ok(())
+      }
       Token::Raw(s) => write!(f, "{s}"),
     }
   }
@@ -390,7 +397,6 @@ impl<'src> Emit<'src> for ast::Routes<'src> {
 
 impl<'src> Emit<'src> for ast::Route<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
-    // TODO: emit request body params into doc comment for multipart/form-data
     // TODO: emit application/x-www-form-urlencoded into url
     // TODO: a way to emit response types predicated on status code
     /*
@@ -413,7 +419,30 @@ impl<'src> Emit<'src> for ast::Route<'src> {
     }
     */
     if let Some(desc) = self.description {
-      buffer.doc(desc.clone());
+      if let Some(body) = self
+        .request_body
+        .as_ref()
+        .filter(|b| b.mime_type == ast::MimeType::Multipart_FormData)
+      {
+        use std::fmt::Write;
+        let mut desc = format!("{desc}\n\nForm data:\n");
+        if let ast::TypeRef::Type(ast::Type::Object(props)) = &body.ty {
+          for (prop, ty) in props {
+            let mut buffer = Buffer::new();
+            ty.emit(&mut buffer);
+            writeln!(
+              desc,
+              "- {} ({})",
+              prop,
+              trim_in_place(String::from(buffer))
+            )
+            .unwrap();
+          }
+        }
+        buffer.doc(desc);
+      } else {
+        buffer.doc(desc.clone());
+      }
     }
     buffer.raw("export async function");
     buffer.identifier(self.name.clone());
@@ -422,7 +451,7 @@ impl<'src> Emit<'src> for ast::Route<'src> {
         buffer.raw("params :");
         buffer.braces(|buffer| {
           for param in self.parameters.values() {
-            buffer.identifier(param.name.clone());
+            buffer.string(param.name.clone());
             buffer.colon();
             (&param.ty).emit(buffer);
             buffer.comma();
@@ -480,7 +509,17 @@ impl<'src> Emit<'src> for ast::Route<'src> {
                 ast::MimeType::Multipart_FormData => {}
               }
             }
-            // TODO: emit header params
+            for param in self
+              .parameters
+              .values()
+              .filter(|p| p.kind == ast::ParameterKind::Header)
+            {
+              buffer.string(param.name.clone());
+              buffer.colon();
+              buffer.identifier("params");
+              buffer.brackets(|buffer| buffer.string(param.name.clone()));
+              buffer.comma();
+            }
           });
           buffer.comma();
 
@@ -562,12 +601,12 @@ impl<'a, 'src> Emit<'src> for Url<'a, 'src> {
                   | ast::TypeRef::Type(ast::Type::Optional(
                     box ast::TypeRef::Type(ast::Type::Array(..)),
                   )) => {
-                    buffer.raw(format!("Object . fromEntries ( params [ '{0}' ] . map ( ( v , i ) => [ `{0}[${{i}}]` , v ] ) )", param.name));
+                    buffer.raw(format!("Object . fromEntries ( params [ '{0}' ] . map ( ( v , i ) => [ `{0}[${{i}}]` , v . toString ( ) ] ) )", param.name));
                   }
                   // TODO: key indices
                   // anything else we just hope that it stringifies properly
                   _ => {
-                    buffer.raw(format!("{{ '{0}' : params [ '{0}' ] }}", param.name));
+                    buffer.raw(format!("{{ '{0}' : params [ '{0}' ] . toString ( ) }}", param.name));
                   }
                 }
               });
@@ -766,10 +805,10 @@ mod tests {
         ". replace ( '{b}' , params [ 'b' ] )",
         ";",
         "url . search = new URLSearchParams ( {",
-        "... ( params [ 'c' ] && ( { 'c' : params [ 'c' ] } ) )",
-        "... ( params [ 'd' ] && ( { 'd' : params [ 'd' ] } ) )",
-        "... ( params [ 'e' ] && ( Object . fromEntries ( params [ 'e' ] . map ( ( v , i ) => [ `e[${i}]` , v ] ) ) ) )",
-        "... ( params [ 'f' ] && ( Object . fromEntries ( params [ 'f' ] . map ( ( v , i ) => [ `f[${i}]` , v ] ) ) ) )",
+        "... ( params [ 'c' ] && ( { 'c' : params [ 'c' ] . toString ( ) } ) ) ,",
+        "... ( params [ 'd' ] && ( { 'd' : params [ 'd' ] . toString ( ) } ) ) ,",
+        "... ( params [ 'e' ] && ( Object . fromEntries ( params [ 'e' ] . map ( ( v , i ) => [ `e[${i}]` , v . toString ( ) ] ) ) ) ) ,",
+        "... ( params [ 'f' ] && ( Object . fromEntries ( params [ 'f' ] . map ( ( v , i ) => [ `f[${i}]` , v . toString ( ) ] ) ) ) ) ,",
         "} ) . toString ( ) ;"
       ]
       .join(" ")
