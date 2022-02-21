@@ -45,10 +45,10 @@ pub fn trim_in_place(s: impl Into<String>) -> String {
   let trimmed = s.trim();
   let start = trimmed.as_ptr();
   let len = trimmed.len();
+  // SAFETY:
+  // - `trimmed` is valid utf-8
+  // - all memory reads/writes are valid, because we are copying `N` bytes of the string into itself, where `N` <= original length
   unsafe {
-    // SAFETY:
-    // - `trimmed` is valid utf-8
-    // - all memory reads/writes are valid, because we are copying `N` bytes of the string into itself, where `N` <= original length
     let v = s.as_mut_vec();
     std::ptr::copy(start, v.as_mut_ptr(), len);
     v.set_len(len);

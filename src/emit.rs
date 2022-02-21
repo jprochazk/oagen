@@ -397,7 +397,6 @@ impl<'src> Emit<'src> for ast::Routes<'src> {
 
 impl<'src> Emit<'src> for ast::Route<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
-    // TODO: emit application/x-www-form-urlencoded into url
     // TODO: a way to emit response types predicated on status code
     /*
     /**
@@ -543,7 +542,6 @@ impl<'src> Emit<'src> for ast::Route<'src> {
   }
 }
 
-// TODO: emit application/x-www-form-urlencoded in URL
 struct Url<'a, 'src>(Cow<'src, str>, &'a ast::Parameters<'src>);
 impl<'a, 'src> Emit<'src> for Url<'a, 'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {

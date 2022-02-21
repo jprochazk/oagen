@@ -6,8 +6,6 @@ use indexmap::IndexMap;
 use openapiv3 as oapi3;
 use std::borrow::Cow;
 
-// TODO: parse security
-
 struct Context<'src> {
   scope: Scope,
   errors: Vec<Error>,
@@ -307,7 +305,6 @@ fn one_of<'src>(
   Some(ast::Type::Union(parts))
 }
 
-// NOTE: only string enums are supported
 fn string_type<'src>(
   _ctx: &mut Context<'src>,
   str: &'src oapi3::StringType,
