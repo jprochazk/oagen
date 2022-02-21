@@ -49,13 +49,15 @@ fn op_parse_name<'src>(
   op: &'src oapi3::Operation,
 ) -> Option<Cow<'src, str>> {
   let _scope = ctx.scope("name");
-  match op.summary.as_ref().or(op.operation_id.as_ref()) {
-    Some(v) => Some(util::to_camel_case(v).into()),
-    None => {
-      ctx.error(Error::required_field_or("summary", "operation_id"));
-      None
+  op.operation_id.as_ref().map(Cow::from).or_else(|| {
+    match op.summary.as_ref() {
+      Some(v) => Some(util::to_camel_case(v).into()),
+      None => {
+        ctx.error(Error::required_field_or("summary", "operation_id"));
+        None
+      }
     }
-  }
+  })
 }
 
 fn op_parse_desc(op: &oapi3::Operation) -> Option<Cow<'_, str>> {
@@ -76,12 +78,15 @@ fn op_parse_params<'src>(
       use oapi3::Parameter::*;
       let (kind, data) = match param {
         Query { parameter_data, .. } => {
-          (ast::ParameterKind::Query(ast::Index::Array), parameter_data)
+          (ast::ParameterKind::Query, parameter_data)
         }
         Path { parameter_data, .. } => {
           (ast::ParameterKind::Path, parameter_data)
         }
-        Header { .. } | Cookie { .. } => {
+        Header { parameter_data, .. } => {
+          (ast::ParameterKind::Header, parameter_data)
+        }
+        Cookie { .. } => {
           return None;
         }
       };
@@ -95,6 +100,9 @@ fn op_parse_params<'src>(
           }
         },
       )?;
+      // TODO: validate types here
+      // - cannot be a TypeRef::Ref
+      // - inner can only be String, Number, Boolean, single-level Object, Array + any of those in Optional
       let param = ast::Parameter {
         name: data.name.as_str().into(),
         description: data.description.as_ref().map(|v| v.as_str().into()),
@@ -113,29 +121,15 @@ fn op_parse_params<'src>(
   Some(params)
 }
 
-fn parse_request<'src>(
-  ctx: &mut Context<'src>,
-  req: &'src oapi3::MediaType,
-) -> Option<ast::Request<'src>> {
-  req
-    .schema
-    .as_ref()
-    .and_then(|b| resolve_type(ctx, None, b))
-    .map(|ty| ast::Request {
-      headers: vec![],
-      body: Some(ast::Body::Typed(ty)),
-    })
-}
-
-fn op_parse_requests<'src>(
+fn op_parse_request<'src>(
   ctx: &mut Context<'src>,
   op: &'src oapi3::Operation,
-) -> ast::Requests<'src> {
+) -> Option<ast::RequestBody<'src>> {
   let _scope = ctx.scope("requests");
   let body = match op.request_body.as_ref() {
     Some(body) => body,
     None => {
-      return vec![];
+      return None;
     }
   };
   let body = match body.as_item() {
@@ -143,26 +137,29 @@ fn op_parse_requests<'src>(
     None => {
       ctx.error(Error::unsupported_ref("request_body"));
 
-      return vec![];
+      return None;
     }
   };
-  let mut out = Vec::with_capacity(body.content.len());
-  for (mime, inner) in body.content.iter() {
+  if let Some((mime, inner)) = body.content.first() {
     let mime = match mime.as_str().try_into() {
       Ok(v) => v,
       Err(..) => {
         ctx.error(Error::invalid_value("mime type", mime.to_string()));
-        continue;
+        return None;
       }
     };
-    let req = match parse_request(ctx, inner) {
-      Some(v) => v,
-      None => continue,
-    };
-    out.push((mime, req));
+    inner
+      .schema
+      .as_ref()
+      .and_then(|b| resolve_type(ctx, None, b))
+      .map(|ty| ast::RequestBody {
+        mime_type: mime,
+        headers: vec![],
+        ty,
+      })
+  } else {
+    None
   }
-
-  out
 }
 
 fn parse_code<'src>(
@@ -197,8 +194,7 @@ fn parse_response<'src>(
     body: res
       .schema
       .as_ref()
-      .and_then(|schema| resolve_type(ctx, None, schema))
-      .map(ast::Body::Typed),
+      .and_then(|schema| resolve_type(ctx, None, schema)),
   })
 }
 
@@ -280,7 +276,7 @@ fn parse_route<'src>(
   let endpoint = uri.into();
   let description = op_parse_desc(op);
   let parameters = op_parse_params(ctx, op);
-  let request = op_parse_requests(ctx, op);
+  let request = op_parse_request(ctx, op);
   let responses = op_parse_responses(ctx, op);
   let security = op_parse_security(ctx, op);
 
@@ -290,7 +286,7 @@ fn parse_route<'src>(
     method,
     description,
     parameters: parameters?,
-    requests: request,
+    request_body: request,
     responses,
     security,
   })

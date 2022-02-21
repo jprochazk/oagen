@@ -24,7 +24,7 @@ pub struct Route<'src> {
   pub method: Method,
   pub description: Option<Cow<'src, str>>,
   pub parameters: Parameters<'src>,
-  pub requests: Requests<'src>,
+  pub request_body: Option<RequestBody<'src>>,
   pub responses: Responses<'src>,
   pub security: Option<Security<'src>>,
 }
@@ -42,21 +42,15 @@ pub struct Parameter<'src> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParameterKind {
   Path,
-  Query(Index),
+  Query,
+  Header,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Index {
-  Array,
-  Key,
-}
-
-pub type Requests<'src> = Vec<(MimeType, Request<'src>)>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Request<'src> {
+pub struct RequestBody<'src> {
+  pub mime_type: MimeType,
   pub headers: Vec<Cow<'src, str>>,
-  pub body: Option<Body<'src>>,
+  pub ty: TypeRef<'src>,
 }
 
 pub type Code = usize;
@@ -69,7 +63,7 @@ pub struct Responses<'src> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Response<'src> {
-  pub body: Option<Body<'src>>,
+  pub body: Option<TypeRef<'src>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -79,12 +73,6 @@ pub struct Security<'src> {
 }
 
 pub type SecuritySchemes<'src> = IndexMap<Cow<'src, str>, Security<'src>>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Body<'src> {
-  Untyped(Cow<'src, str>),
-  Typed(TypeRef<'src>),
-}
 
 pub type Types<'src> = IndexMap<Cow<'src, str>, Type<'src>>;
 
@@ -136,6 +124,23 @@ pub enum Method {
   Connect,
 }
 
+impl Method {
+  pub fn as_str(&self) -> &'static str {
+    use Method::*;
+    match self {
+      Get => "get",
+      Post => "post",
+      Put => "put",
+      Delete => "delete",
+      Patch => "patch",
+      Head => "head",
+      Options => "options",
+      Trace => "trace",
+      Connect => "connect",
+    }
+  }
+}
+
 impl<'src> TryFrom<&'src str> for Method {
   type Error = ();
   fn try_from(value: &'src str) -> Result<Self, Self::Error> {
@@ -164,22 +169,7 @@ impl TryFrom<String> for Method {
 
 impl std::fmt::Debug for Method {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    use Method::*;
-    write!(
-      f,
-      "{}",
-      match self {
-        Get => "get",
-        Post => "post",
-        Put => "put",
-        Delete => "delete",
-        Patch => "patch",
-        Head => "head",
-        Options => "options",
-        Trace => "trace",
-        Connect => "connect",
-      }
-    )
+    write!(f, "{}", self.as_str())
   }
 }
 

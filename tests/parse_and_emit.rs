@@ -22,3 +22,6 @@ macro_rules! try_parse_and_emit {
 
 try_parse_and_emit!(job_queue, "./data/job-queue.json");
 try_parse_and_emit!(sandboxes, "./data/sandboxes.json");
+try_parse_and_emit!(sapi_importer, "./data/sapi-importer.json");
+try_parse_and_emit!(scheduler, "./data/scheduler.json");
+try_parse_and_emit!(sync_actions, "./data/sync-actions.json");

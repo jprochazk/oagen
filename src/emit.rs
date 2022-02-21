@@ -1,3 +1,5 @@
+#![allow(clippy::needless_borrow)]
+
 use std::borrow::Cow;
 
 use crate::{ast, util::trim_in_place};
@@ -15,6 +17,10 @@ pub enum Token<'src> {
   Comma,
   /// .
   Dot,
+  /// ...
+  TripleDot,
+  /// &&
+  AndAnd,
   /// ;
   Semicolon,
   /// {
@@ -40,6 +46,8 @@ pub enum Token<'src> {
   String(Cow<'src, str>),
   /// /** doc comment */
   Doc(Cow<'src, str>),
+  /// raw token
+  Raw(Cow<'src, str>),
 }
 
 impl<'src> std::fmt::Display for Token<'src> {
@@ -51,6 +59,8 @@ impl<'src> std::fmt::Display for Token<'src> {
       Token::Question => write!(f, "?"),
       Token::Comma => write!(f, ","),
       Token::Dot => write!(f, "."),
+      Token::TripleDot => write!(f, "..."),
+      Token::AndAnd => write!(f, "&&"),
       Token::Semicolon => write!(f, ";"),
       Token::LeftBrace => write!(f, "{{"),
       Token::RightBrace => write!(f, "}}"),
@@ -62,7 +72,8 @@ impl<'src> std::fmt::Display for Token<'src> {
       Token::GreaterThan => write!(f, ">"),
       Token::Identifier(i) => write!(f, "{i}"),
       Token::String(s) => write!(f, "'{s}'"),
-      Token::Doc(d) => write!(f, "/** {d} */"),
+      Token::Doc(d) => write!(f, "\n/** {d} */\n"),
+      Token::Raw(s) => write!(f, "{s}"),
     }
   }
 }
@@ -121,6 +132,14 @@ impl<'src> Buffer<'src> {
 
   pub fn dot(&mut self) {
     self.tokens.push(Token::Dot);
+  }
+
+  pub fn triple_dot(&mut self) {
+    self.tokens.push(Token::TripleDot);
+  }
+
+  pub fn and_and(&mut self) {
+    self.tokens.push(Token::AndAnd);
   }
 
   pub fn semicolon(&mut self) {
@@ -191,6 +210,10 @@ impl<'src> Buffer<'src> {
   pub fn doc(&mut self, v: impl Into<Cow<'src, str>>) {
     self.tokens.push(Token::Doc(v.into()));
   }
+
+  pub fn raw(&mut self, v: impl Into<Cow<'src, str>>) {
+    self.tokens.push(Token::Raw(v.into()));
+  }
 }
 
 pub fn emit<'src>(input: impl Emit<'src>) -> String {
@@ -205,9 +228,9 @@ pub trait Emit<'src> {
 
 impl<'src> Emit<'src> for ast::Ast<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
-    //self.schemes.emit(buffer);
+    self.schemes.emit(buffer);
     self.types.emit(buffer);
-    //self.routes.emit(buffer);
+    self.routes.emit(buffer);
   }
 }
 
@@ -232,14 +255,26 @@ impl<'src> Emit<'src> for (Cow<'src, str>, ast::Type<'src>) {
 
 impl<'src> Emit<'src> for ast::TypeRef<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
+    (&self).emit(buffer)
+  }
+}
+
+impl<'a, 'src> Emit<'src> for &'a ast::TypeRef<'src> {
+  fn emit(self, buffer: &mut Buffer<'src>) {
     match self {
       ast::TypeRef::Type(ty) => ty.emit(buffer),
-      ast::TypeRef::Ref(name) => buffer.identifier(name),
+      ast::TypeRef::Ref(name) => buffer.identifier(name.clone()),
     }
   }
 }
 
 impl<'src> Emit<'src> for ast::Type<'src> {
+  fn emit(self, buffer: &mut Buffer<'src>) {
+    (&self).emit(buffer)
+  }
+}
+
+impl<'a, 'src> Emit<'src> for &'a ast::Type<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
     match self {
       // any
@@ -261,8 +296,8 @@ impl<'src> Emit<'src> for ast::Type<'src> {
       // ("a" | "b" | "c" | ...)
       ast::Type::Enum(v) => buffer.parens(|buffer| {
         buffer.extend(
-          v.into_iter()
-            .map(Token::String)
+          v.iter()
+            .map(|v| Token::String(v.clone()))
             .intersperse_with(|| Token::Or),
         )
       }),
@@ -275,7 +310,7 @@ impl<'src> Emit<'src> for ast::Type<'src> {
       ast::Type::Object(o) => buffer.parens(|buffer| {
         buffer.braces(|buffer| {
           for (key, ty) in o {
-            buffer.string(key);
+            buffer.string(key.clone());
             if matches!(&ty, ast::TypeRef::Type(ast::Type::Optional(..))) {
               buffer.question();
             }
@@ -287,7 +322,7 @@ impl<'src> Emit<'src> for ast::Type<'src> {
       }),
       // (A | B)
       ast::Type::Union(v) => buffer.parens(|buffer| {
-        let mut iter = v.into_iter();
+        let mut iter = v.iter();
         if let Some(first) = iter.next() {
           first.emit(buffer);
         }
@@ -313,44 +348,28 @@ impl<'src> Emit<'src> for ast::SecuritySchemes<'src> {
     let _authHeaders;
     export function init(baseUrl: string, scheme0: string, scheme1: string, ...) {
       _baseUrl = baseUrl;
-      _authHeaders = { ["key0"]: scheme0, ["key1"]: scheme1, ... }
+      _authHeaders = { 'key0': scheme0, 'key1': scheme1, ... }
     }
     */
-    buffer.identifier("let");
-    buffer.identifier("_baseUrl");
-    buffer.semicolon();
+    buffer.raw("let _baseUrl ;");
+    buffer.raw("let _authHeaders ;");
 
-    buffer.identifier("let");
-    buffer.identifier("_authHeaders");
-    buffer.semicolon();
-
-    buffer.identifier("export");
-    buffer.identifier("function");
-    buffer.identifier("init");
+    buffer.raw("export function init");
     buffer.parens(|buffer| {
-      buffer.identifier("baseUrl");
-      buffer.colon();
-      buffer.identifier("string");
-      buffer.comma();
+      buffer.raw("baseUrl : string ,");
 
       for scheme in self.values() {
         buffer.identifier(scheme.name.clone());
-        buffer.colon();
-        buffer.identifier("string");
-        buffer.comma()
+        buffer.raw(": string ,");
       }
     });
     buffer.braces(|buffer| {
-      buffer.identifier("_baseUrl");
-      buffer.equals();
-      buffer.identifier("baseUrl");
-      buffer.semicolon();
+      buffer.raw("_baseUrl = baseUrl ;");
 
-      buffer.identifier("_authHeaders");
-      buffer.equals();
+      buffer.raw("_authHeaders =");
       buffer.braces(|buffer| {
         for scheme in self.values() {
-          buffer.brackets(|buffer| buffer.string(scheme.key.clone()));
+          buffer.string(scheme.key.clone());
           buffer.colon();
           buffer.identifier(scheme.name.clone());
           buffer.comma();
@@ -361,84 +380,207 @@ impl<'src> Emit<'src> for ast::SecuritySchemes<'src> {
   }
 }
 
+impl<'src> Emit<'src> for ast::Routes<'src> {
+  fn emit(self, buffer: &mut Buffer<'src>) {
+    for route in self {
+      route.emit(buffer)
+    }
+  }
+}
+
 impl<'src> Emit<'src> for ast::Route<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
-    // TODO: emit multipart/form-data
+    // TODO: emit request body params into doc comment for multipart/form-data
+    // TODO: emit application/x-www-form-urlencoded into url
     // TODO: a way to emit response types predicated on status code
     /*
     /**
      * #description
      */
     export async function #name (
-      #$each(param) '(#name : string),
-      pathParam0 : string,
-      #(body? '(body : #requestType , ))
+      #(params? \(#name : #type , ))
+      #(body? \(body : #type , ))
     ) : Promise < unknown > {
 
-      return await fetch ( url , {
+      return await fetch ( url . toString ( ) , {
         method : #method,
         headers : {
           ... _authHeaders ,
-          #(body.json? '("Content-Type" : "application/json"))
+          #(body.json? \("Content-Type" : "application/json"))
         },
-        #(body? '(JSON . stringify ( body )))
+        #(body? \(JSON . stringify ( body )))
       } )
     }
     */
     if let Some(desc) = self.description {
       buffer.doc(desc.clone());
     }
-    buffer.identifier("export");
-    buffer.identifier("async");
-    buffer.identifier("function");
+    buffer.raw("export async function");
     buffer.identifier(self.name.clone());
     buffer.parens(|buffer| {
-      // TODO
+      if !self.parameters.is_empty() {
+        buffer.raw("params :");
+        buffer.braces(|buffer| {
+          for param in self.parameters.values() {
+            buffer.identifier(param.name.clone());
+            buffer.colon();
+            (&param.ty).emit(buffer);
+            buffer.comma();
+          }
+        });
+        buffer.comma();
+      }
+      if let Some(body) = self.request_body.as_ref() {
+        buffer.identifier("body");
+        buffer.colon();
+        match body.mime_type {
+          ast::MimeType::Multipart_FormData => buffer.identifier("FormData"),
+          ast::MimeType::Application_Json => (&body.ty).emit(buffer),
+          ast::MimeType::Text_Plain => buffer.identifier("string"),
+          _ => {}
+        }
+        buffer.comma();
+      }
     });
     buffer.colon();
     buffer.identifier("Promise");
     buffer.generics(|buffer| buffer.identifier("unknown"));
     buffer.braces(|buffer| {
-      // TODO
+      Url(self.endpoint.clone(), &self.parameters).emit(buffer);
+      buffer.raw("return await fetch");
+      buffer.parens(|buffer| {
+        buffer.raw("url . toString ( )");
+        buffer.comma();
+        buffer.braces(|buffer| {
+          buffer.identifier("method");
+          buffer.colon();
+          buffer.string(self.method.as_str());
+          buffer.comma();
+
+          buffer.identifier("headers");
+          buffer.colon();
+          buffer.braces(|buffer| {
+            buffer.raw("... _authHeaders ,");
+            if let Some(mime_type) =
+              self.request_body.as_ref().map(|r| r.mime_type)
+            {
+              match mime_type {
+                ast::MimeType::Application_FormUrlEncoded => {
+                  buffer.raw(
+                    "'Content-Type' : 'application/x-www-form-urlencoded' ,",
+                  );
+                }
+                ast::MimeType::Application_Json => {
+                  buffer.raw("'Content-Type' : 'application/json' ,");
+                }
+                ast::MimeType::Text_Plain => {
+                  buffer.raw("'Content-Type' : 'text/plain' ,");
+                }
+                // browser adds the header for FormData automatically
+                ast::MimeType::Multipart_FormData => {}
+              }
+            }
+            // TODO: emit header params
+          });
+          buffer.comma();
+
+          if let Some(body) = self.request_body.as_ref() {
+            buffer.identifier("body");
+            buffer.colon();
+            match body.mime_type {
+              ast::MimeType::Application_Json => {
+                buffer.raw("JSON . stringify ( body )")
+              }
+              ast::MimeType::Multipart_FormData | ast::MimeType::Text_Plain => {
+                buffer.identifier("body")
+              }
+              // we emit form-urlencoded into url
+              ast::MimeType::Application_FormUrlEncoded => {}
+            }
+            buffer.comma();
+          }
+        });
+      });
     });
   }
 }
 
 // TODO: emit application/x-www-form-urlencoded in URL
-// NOTE: assumes that `#name` is defined
-impl<'src> Emit<'src> for (Cow<'src, str>, &'src ast::Parameters<'src>) {
+struct Url<'a, 'src>(Cow<'src, str>, &'a ast::Parameters<'src>);
+impl<'a, 'src> Emit<'src> for Url<'a, 'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
-    let (endpoint, params) = self;
+    let Url(endpoint, params) = self;
     /*
     const url = new URL ( _baseUrl ) ;
     url . pathname = endpoint
-      #$each(path param) '(. replace ( "{#name}" , #name ))
+      #$each(path param) \(. replace ( '{#name}' , params [ '#name' ] ))
       ;
+    url . search = new URLSearchParams ( {
+      #$each(query array param) \(... ( params [ '#name' ] && Object . fromEntries ( params [ '#name' ] . map ( ( v , i ) => [ `#name[${i}]` , v ] ) ) ))
+      #$each(query param) \(... ( params [ '#name' ] && { '#name' : params [ '#name' ] } ))
+    } ) . toString ( ) ;
     */
-    buffer.identifier("const");
-    buffer.identifier("url");
-    buffer.equals();
-    buffer.identifier("new");
-    buffer.identifier("URL");
+    buffer.raw("const url = new URL");
     buffer.parens(|buffer| buffer.identifier("_baseUrl"));
     buffer.semicolon();
 
-    buffer.identifier("url");
-    buffer.dot();
-    buffer.identifier("pathname");
-    buffer.equals();
+    buffer.raw("url . pathname =");
     buffer.string(endpoint.clone());
-    for param in params.values() {
-      buffer.dot();
-      buffer.identifier("replace");
+    for param in params
+      .values()
+      .filter(|p| p.kind == ast::ParameterKind::Path)
+    {
+      buffer.raw(". replace");
       buffer.parens(|buffer| {
         let name = param.name.clone();
         buffer.string(format!("{{{name}}}"));
         buffer.comma();
-        buffer.identifier(name);
-      })
+        buffer.identifier("params");
+        buffer.brackets(|buffer| buffer.string(name));
+      });
     }
     buffer.semicolon();
+    let has_query_params =
+      params.values().any(|p| p.kind == ast::ParameterKind::Query);
+    if has_query_params {
+      buffer.raw("url . search = new URLSearchParams");
+      buffer.parens(|buffer| {
+        buffer.braces(|buffer| {
+          for param in params
+            .values()
+            .filter(|p| p.kind == ast::ParameterKind::Query)
+          {
+            buffer.triple_dot();
+            buffer.parens(|buffer| {
+              buffer.identifier("params");
+              buffer.brackets(|buffer| buffer.string(param.name.clone()));
+              buffer.and_and();
+              buffer.parens(|buffer| {
+                match &param.ty {
+                  // array indices
+                  ast::TypeRef::Type(ast::Type::Array(..))
+                  | ast::TypeRef::Type(ast::Type::Optional(
+                    box ast::TypeRef::Type(ast::Type::Array(..)),
+                  )) => {
+                    buffer.raw(format!("Object . fromEntries ( params [ '{0}' ] . map ( ( v , i ) => [ `{0}[${{i}}]` , v ] ) )", param.name));
+                  }
+                  // TODO: key indices
+                  // anything else we just hope that it stringifies properly
+                  _ => {
+                    buffer.raw(format!("{{ '{0}' : params [ '{0}' ] }}", param.name));
+                  }
+                }
+              });
+            });
+            buffer.comma();
+          }
+        })
+      });
+      buffer.dot();
+      buffer.identifier("toString");
+      buffer.parens0();
+      buffer.semicolon();
+    }
   }
 }
 
@@ -564,8 +706,8 @@ mod tests {
         "export function init ( baseUrl : string , name0 : string , name1 : string , ) {",
         "_baseUrl = baseUrl ;",
         "_authHeaders = {",
-        "[ 'header-key-0' ] : name0 ,",
-        "[ 'header-key-1' ] : name1 ,",
+        "'header-key-0' : name0 ,",
+        "'header-key-1' : name1 ,",
         "} ;",
         "}"
       ]
@@ -588,23 +730,47 @@ mod tests {
         description: None,
         kind: ast::ParameterKind::Path,
         ty: ast::TypeRef::Ref(Default::default()),
+      },
+      "c" => ast::Parameter {
+        name: "c".into(),
+        description: None,
+        kind: ast::ParameterKind::Query,
+        ty: ty!(ast::Type::String)
+      },
+      "d" => ast::Parameter {
+        name: "d".into(),
+        description: None,
+        kind: ast::ParameterKind::Query,
+        ty: ty!(ast::Type::Optional(box ty!(ast::Type::String)))
+      },
+      "e" => ast::Parameter {
+        name: "e".into(),
+        description: None,
+        kind: ast::ParameterKind::Query,
+        ty: ty!(ast::Type::Array(box ty!(ast::Type::String)))
+      },
+      "f" => ast::Parameter {
+        name: "f".into(),
+        description: None,
+        kind: ast::ParameterKind::Query,
+        ty: ty!(ast::Type::Optional(box ty!(ast::Type::Array(box ty!(ast::Type::String)))))
       }
     };
-    ("/endpoint/{a}/test/{b}".into(), &params).emit(&mut buffer);
+    Url("/endpoint/{a}/test/{b}".into(), &params).emit(&mut buffer);
     assert_eq!(
       String::from(buffer).trim(),
-      /*
-      const url = new URL ( _baseUrl ) ;
-      url . pathname = endpoint
-        #$each(path param) '(. replace ( "{#name}" , #name ))
-        ;
-      */
       [
         "const url = new URL ( _baseUrl ) ;",
         "url . pathname = '/endpoint/{a}/test/{b}'",
-        ". replace ( '{a}' , a )",
-        ". replace ( '{b}' , b )",
-        ";"
+        ". replace ( '{a}' , params [ 'a' ] )",
+        ". replace ( '{b}' , params [ 'b' ] )",
+        ";",
+        "url . search = new URLSearchParams ( {",
+        "... ( params [ 'c' ] && ( { 'c' : params [ 'c' ] } ) )",
+        "... ( params [ 'd' ] && ( { 'd' : params [ 'd' ] } ) )",
+        "... ( params [ 'e' ] && ( Object . fromEntries ( params [ 'e' ] . map ( ( v , i ) => [ `e[${i}]` , v ] ) ) ) )",
+        "... ( params [ 'f' ] && ( Object . fromEntries ( params [ 'f' ] . map ( ( v , i ) => [ `f[${i}]` , v ] ) ) ) )",
+        "} ) . toString ( ) ;"
       ]
       .join(" ")
     );
