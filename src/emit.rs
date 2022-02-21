@@ -494,11 +494,6 @@ impl<'src> Emit<'src> for ast::Route<'src> {
               self.request_body.as_ref().map(|r| r.mime_type)
             {
               match mime_type {
-                ast::MimeType::Application_FormUrlEncoded => {
-                  buffer.raw(
-                    "'Content-Type' : 'application/x-www-form-urlencoded' ,",
-                  );
-                }
                 ast::MimeType::Application_Json => {
                   buffer.raw("'Content-Type' : 'application/json' ,");
                 }
@@ -506,7 +501,11 @@ impl<'src> Emit<'src> for ast::Route<'src> {
                   buffer.raw("'Content-Type' : 'text/plain' ,");
                 }
                 // browser adds the header for FormData automatically
-                ast::MimeType::Multipart_FormData => {}
+                // application/x-www-form-urlencoded is only used in one request, and it has
+                // a formdata alternative, so it's still undecided how form-urlencoded in body
+                // should be handled, if at all.
+                ast::MimeType::Multipart_FormData
+                | ast::MimeType::Application_FormUrlEncoded => {}
               }
             }
             for param in self
