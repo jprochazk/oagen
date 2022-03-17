@@ -252,6 +252,7 @@ impl<'src> Emit<'src> for ast::Types<'src> {
 impl<'src> Emit<'src> for (Cow<'src, str>, ast::Type<'src>) {
   fn emit(self, buffer: &mut Buffer<'src>) {
     let (name, ty) = self;
+    buffer.identifier("export");
     buffer.identifier("type");
     buffer.identifier(name);
     buffer.equals();
@@ -351,15 +352,15 @@ impl<'a, 'src> Emit<'src> for &'a ast::Type<'src> {
 impl<'src> Emit<'src> for ast::SecuritySchemes<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
     /*
-    let _baseUrl;
-    let _authHeaders;
+    let _baseUrl: string = "";
+    let _authHeaders: Record<string, string> = {};
     export function init(baseUrl: string, scheme0: string, scheme1: string, ...) {
       _baseUrl = baseUrl;
       _authHeaders = { 'key0': scheme0, 'key1': scheme1, ... }
     }
     */
-    buffer.raw("let _baseUrl ;");
-    buffer.raw("let _authHeaders ;");
+    buffer.raw("let _baseUrl : string = \"\" ;");
+    buffer.raw("let _authHeaders : Record < string , string > = { } ;");
 
     buffer.raw("export function init");
     buffer.parens(|buffer| {
@@ -715,7 +716,7 @@ mod tests {
   fn emit_type_decl() {
     let mut buffer = Buffer::new();
     ("Test".into(), ast::Type::Any).emit(&mut buffer);
-    assert_eq!(String::from(buffer).trim(), "type Test = any ;");
+    assert_eq!(String::from(buffer).trim(), "export type Test = any ;");
   }
 
   #[test]
@@ -737,8 +738,8 @@ mod tests {
     assert_eq!(
       String::from(buffer).trim(),
       [
-        "let _baseUrl ;",
-        "let _authHeaders ;",
+        "let _baseUrl : string = \"\" ;",
+        "let _authHeaders : Record < string , string > = { } ;",
         "export function init ( baseUrl : string , name0 : string , name1 : string , ) {",
         "_baseUrl = baseUrl ;",
         "_authHeaders = {",
