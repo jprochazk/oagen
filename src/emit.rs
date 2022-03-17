@@ -398,7 +398,7 @@ impl<'src> Emit<'src> for ast::Routes<'src> {
 
 impl<'src> Emit<'src> for ast::Route<'src> {
   fn emit(self, buffer: &mut Buffer<'src>) {
-    // TODO: a way to emit response types predicated on status code
+    // TODO: timeouts
     /*
     /**
      * #description
@@ -473,7 +473,7 @@ impl<'src> Emit<'src> for ast::Route<'src> {
     });
     buffer.colon();
     buffer.identifier("Promise");
-    buffer.generics(|buffer| buffer.identifier("unknown"));
+    buffer.generics(|buffer| buffer.identifier("Response"));
     buffer.braces(|buffer| {
       Url(self.endpoint.clone(), &self.parameters).emit(buffer);
       buffer.raw("return await fetch");
