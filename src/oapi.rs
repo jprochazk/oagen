@@ -108,7 +108,7 @@ fn op_parse_params<'src>(
         ty: if data.required {
           ty
         } else {
-          ast::TypeRef::Type(ast::Type::Optional(box ty))
+          ast::TypeRef::Type(ast::Type::Optional(Box::new(ty)))
         },
       };
       params.insert(data.name.as_str().into(), param);
@@ -334,7 +334,7 @@ fn object_type<'src>(
       if obj.required.contains(key) {
         ty
       } else {
-        ast::TypeRef::Type(ast::Type::Optional(box ty))
+        ast::TypeRef::Type(ast::Type::Optional(Box::new(ty)))
       },
     );
   }
@@ -379,11 +379,11 @@ fn array_type<'src>(
   ctx: &mut Context<'src>,
   arr: &'src oapi3::ArrayType,
 ) -> Option<ast::Type<'src>> {
-  Some(ast::Type::Array(box resolve_type_boxed(
+  Some(ast::Type::Array(Box::new(resolve_type_boxed(
     ctx,
     None,
     arr.items.as_ref()?,
-  )?))
+  )?)))
 }
 
 fn schema_to_type<'src>(
@@ -471,7 +471,7 @@ fn resolve_type_boxed<'src>(
 ) -> Option<ast::TypeRef<'src>> {
   use oapi3::ReferenceOr::*;
   match schema {
-    Item(box schema) => resolve_item(ctx, name, schema),
+    Item(schema) => resolve_item(ctx, name, &**schema),
     Reference { reference } => resolve_reference(ctx, reference.as_str()),
   }
 }

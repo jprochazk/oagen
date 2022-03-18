@@ -1,7 +1,3 @@
-#![feature(iter_intersperse)]
-#![feature(box_patterns)]
-#![feature(box_syntax)]
-
 #[macro_use]
 mod util;
 

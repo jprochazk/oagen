@@ -303,15 +303,18 @@ impl<'a, 'src> Emit<'src> for &'a ast::Type<'src> {
       }
       // ("a" | "b" | "c" | ...)
       ast::Type::Enum(v) => buffer.parens(|buffer| {
-        buffer.extend(
-          v.iter()
-            .map(|v| Token::String(v.clone()))
-            .intersperse_with(|| Token::Or),
-        )
+        let mut iter = v.iter();
+        if let Some(v) = iter.next() {
+          buffer.string(v.clone());
+        }
+        for v in iter {
+          buffer.or();
+          buffer.string(v.clone());
+        }
       }),
       // (T)[]
-      ast::Type::Array(box ty) => {
-        buffer.parens(|buffer| ty.emit(buffer));
+      ast::Type::Array(ty) => {
+        buffer.parens(|buffer| (&**ty).emit(buffer));
         buffer.brackets0();
       }
       // ({ a: T, b: T, ... })
@@ -340,8 +343,8 @@ impl<'a, 'src> Emit<'src> for &'a ast::Type<'src> {
         }
       }),
       // (T | undefined)
-      ast::Type::Optional(box ty) => buffer.parens(|buffer| {
-        ty.emit(buffer);
+      ast::Type::Optional(ty) => buffer.parens(|buffer| {
+        (&**ty).emit(buffer);
         buffer.or();
         buffer.identifier("undefined");
       }),
@@ -593,19 +596,10 @@ impl<'a, 'src> Emit<'src> for Url<'a, 'src> {
               buffer.brackets(|buffer| buffer.string(param.name.clone()));
               buffer.and_and();
               buffer.parens(|buffer| {
-                match &param.ty {
-                  // array indices
-                  ast::TypeRef::Type(ast::Type::Array(..))
-                  | ast::TypeRef::Type(ast::Type::Optional(
-                    box ast::TypeRef::Type(ast::Type::Array(..)),
-                  )) => {
-                    buffer.raw(format!("Object . fromEntries ( params [ '{0}' ] . map ( ( v , i ) => [ `{0}[${{i}}]` , v . toString ( ) ] ) )", param.name));
-                  }
-                  // TODO: key indices
-                  // anything else we just hope that it stringifies properly
-                  _ => {
-                    buffer.raw(format!("{{ '{0}' : params [ '{0}' ] . toString ( ) }}", param.name));
-                  }
+                if is_array_type(&param.ty) {
+                  buffer.raw(format!("Object . fromEntries ( params [ '{0}' ] . map ( ( v , i ) => [ `{0}[${{i}}]` , v . toString ( ) ] ) )", param.name));
+                } else {
+                  buffer.raw(format!("{{ '{0}' : params [ '{0}' ] . toString ( ) }}", param.name));
                 }
               });
             });
@@ -618,6 +612,16 @@ impl<'a, 'src> Emit<'src> for Url<'a, 'src> {
       buffer.parens0();
       buffer.semicolon();
     }
+  }
+}
+
+fn is_array_type(ty: &ast::TypeRef) -> bool {
+  match ty {
+    ast::TypeRef::Type(ast::Type::Optional(inner)) => {
+      matches!(&**inner, ast::TypeRef::Type(ast::Type::Array(..)))
+    }
+    ast::TypeRef::Type(ast::Type::Array(..)) => true,
+    _ => false,
   }
 }
 
@@ -663,12 +667,12 @@ mod tests {
   );
   type_emit_test!(
     array_simple_type,
-    Type::Array(box ty!(Type::Any)),
+    Type::Array(Box::new(ty!(Type::Any))),
     "( any ) [ ]"
   );
   type_emit_test!(
     array_nested_type,
-    Type::Array(box ty!(Type::Array(box ty!(Type::Any)))),
+    Type::Array(Box::new(ty!(Type::Array(Box::new(ty!(Type::Any)))))),
     "( ( any ) [ ] ) [ ]"
   );
   type_emit_test!(
@@ -683,12 +687,12 @@ mod tests {
   );
   type_emit_test!(
     array_object_type,
-    Type::Array(box ty!(Type::Object(map! {
+    Type::Array(Box::new(ty!(Type::Object(map! {
       "a" => ty!(Type::Any),
       "b" => ty!(Type::String),
       "c" => ty!(Type::Number),
       "d" => name!("Test")
-    }))),
+    })))),
     "( ( { 'a' : any , 'b' : string , 'c' : number , 'd' : Test , } ) ) [ ]"
   );
   type_emit_test!(
@@ -703,12 +707,12 @@ mod tests {
   );
   type_emit_test!(
     optional_type,
-    Type::Optional(box ty!(Type::String)),
+    Type::Optional(Box::new(ty!(Type::String))),
     "( string | undefined )"
   );
   type_emit_test!(
     optional_ref,
-    Type::Optional(box name!("Test")),
+    Type::Optional(Box::new(name!("Test"))),
     "( Test | undefined )"
   );
 
@@ -778,19 +782,19 @@ mod tests {
         name: "d".into(),
         description: None,
         kind: ast::ParameterKind::Query,
-        ty: ty!(ast::Type::Optional(box ty!(ast::Type::String)))
+        ty: ty!(ast::Type::Optional(Box::new(ty!(ast::Type::String))))
       },
       "e" => ast::Parameter {
         name: "e".into(),
         description: None,
         kind: ast::ParameterKind::Query,
-        ty: ty!(ast::Type::Array(box ty!(ast::Type::String)))
+        ty: ty!(ast::Type::Array(Box::new(ty!(ast::Type::String))))
       },
       "f" => ast::Parameter {
         name: "f".into(),
         description: None,
         kind: ast::ParameterKind::Query,
-        ty: ty!(ast::Type::Optional(box ty!(ast::Type::Array(box ty!(ast::Type::String)))))
+        ty: ty!(ast::Type::Optional(Box::new(ty!(ast::Type::Array(Box::new(ty!(ast::Type::String)))))))
       }
     };
     Url("/endpoint/{a}/test/{b}".into(), &params).emit(&mut buffer);
