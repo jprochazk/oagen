@@ -364,6 +364,7 @@ impl<'src> Emit<'src> for ast::SecuritySchemes<'src> {
     */
     buffer.raw("let _baseUrl : string = \"\" ;");
     buffer.raw("let _authHeaders : Record < string , string > = { } ;");
+    buffer.raw("let _fetch : typeof window . fetch = window . fetch ;");
 
     buffer.raw("export function init");
     buffer.parens(|buffer| {
@@ -373,6 +374,8 @@ impl<'src> Emit<'src> for ast::SecuritySchemes<'src> {
         buffer.identifier(scheme.name.clone());
         buffer.raw(": string ,");
       }
+
+      buffer.raw("fetch : typeof window . fetch ,");
     });
     buffer.braces(|buffer| {
       buffer.raw("_baseUrl = baseUrl ;");
@@ -387,6 +390,8 @@ impl<'src> Emit<'src> for ast::SecuritySchemes<'src> {
         }
       });
       buffer.semicolon();
+
+      buffer.raw("_fetch = fetch ;");
     });
   }
 }
@@ -476,27 +481,11 @@ impl<'src> Emit<'src> for ast::Route<'src> {
     });
     buffer.colon();
     buffer.identifier("Promise");
-
-    let mut ok_responses =
-      self.responses.specific.iter().filter(|r| r.0.is_ok());
-    let simple_response = (ok_responses.clone().count() == 1)
-      .then(|| ok_responses.next())
-      .flatten();
-    buffer.generics(|buffer| {
-      if let Some(response) = simple_response {
-        match response.1.body.as_ref() {
-          Some(ast::TypeRef::Type(ty)) => ty.emit(buffer),
-          Some(ast::TypeRef::Ref(name)) => buffer.identifier(name.clone()),
-          None => todo!(),
-        }
-      } else {
-        buffer.identifier("Response")
-      }
-    });
+    buffer.generics(|buffer| buffer.identifier("Response"));
 
     buffer.braces(|buffer| {
       Url(self.endpoint.clone(), &self.parameters).emit(buffer);
-      buffer.raw("const response = await fetch");
+      buffer.raw("const response = await _fetch");
       buffer.parens(|buffer| {
         buffer.raw("url . toString ( )");
         buffer.comma();
@@ -560,11 +549,7 @@ impl<'src> Emit<'src> for ast::Route<'src> {
         });
       });
       buffer.semicolon();
-      if simple_response.is_some() {
-        buffer.raw("return await response . json ( ) ;");
-      } else {
-        buffer.raw("return response ;");
-      }
+      buffer.raw("return response ;");
     });
   }
 }
@@ -767,12 +752,19 @@ mod tests {
       [
         "let _baseUrl : string = \"\" ;",
         "let _authHeaders : Record < string , string > = { } ;",
-        "export function init ( baseUrl : string , name0 : string , name1 : string , ) {",
+        "let _fetch : typeof window . fetch = window . fetch ;",
+        "export function init (",
+        "baseUrl : string ,",
+        "name0 : string ,",
+        "name1 : string ,",
+        "fetch : typeof window . fetch ,",
+        ") {",
         "_baseUrl = baseUrl ;",
         "_authHeaders = {",
         "'header-key-0' : name0 ,",
         "'header-key-1' : name1 ,",
         "} ;",
+        "_fetch = fetch ;",
         "}"
       ]
       .join(" ")
