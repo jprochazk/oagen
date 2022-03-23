@@ -476,10 +476,27 @@ impl<'src> Emit<'src> for ast::Route<'src> {
     });
     buffer.colon();
     buffer.identifier("Promise");
-    buffer.generics(|buffer| buffer.identifier("Response"));
+
+    let mut ok_responses =
+      self.responses.specific.iter().filter(|r| r.0.is_ok());
+    let simple_response = (ok_responses.clone().count() == 1)
+      .then(|| ok_responses.next())
+      .flatten();
+    buffer.generics(|buffer| {
+      if let Some(response) = simple_response {
+        match response.1.body.as_ref() {
+          Some(ast::TypeRef::Type(ty)) => ty.emit(buffer),
+          Some(ast::TypeRef::Ref(name)) => buffer.identifier(name.clone()),
+          None => todo!(),
+        }
+      } else {
+        buffer.identifier("Response")
+      }
+    });
+
     buffer.braces(|buffer| {
       Url(self.endpoint.clone(), &self.parameters).emit(buffer);
-      buffer.raw("return await fetch");
+      buffer.raw("const response = await fetch");
       buffer.parens(|buffer| {
         buffer.raw("url . toString ( )");
         buffer.comma();
@@ -542,6 +559,12 @@ impl<'src> Emit<'src> for ast::Route<'src> {
           }
         });
       });
+      buffer.semicolon();
+      if simple_response.is_some() {
+        buffer.raw("return await response . json ( ) ;");
+      } else {
+        buffer.raw("return response ;");
+      }
     });
   }
 }

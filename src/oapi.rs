@@ -165,7 +165,7 @@ fn parse_code<'src>(
   code: &'src oapi3::StatusCode,
 ) -> Option<ast::Code> {
   match code {
-    oapi3::StatusCode::Code(v) => Some(*v as usize),
+    oapi3::StatusCode::Code(v) => Some((*v).into()),
     oapi3::StatusCode::Range(_) => {
       ctx.error(Error::unsupported("status code range"));
       None

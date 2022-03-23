@@ -53,7 +53,34 @@ pub struct RequestBody<'src> {
   pub ty: TypeRef<'src>,
 }
 
-pub type Code = usize;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
+pub struct Code(u64);
+
+impl Code {
+  pub fn is_ok(&self) -> bool {
+    (200..299).contains(&self.0)
+  }
+}
+
+macro_rules! impl_code_from {
+  ($n:ident) => {
+    impl From<$n> for Code {
+      fn from(v: $n) -> Self {
+        Self(v as u64)
+      }
+    }
+  };
+}
+impl_code_from!(u64);
+impl_code_from!(u32);
+impl_code_from!(u16);
+impl_code_from!(u8);
+
+impl std::fmt::Display for Code {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    std::fmt::Debug::fmt(self, f)
+  }
+}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Responses<'src> {
