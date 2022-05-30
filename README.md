@@ -31,3 +31,6 @@ $ tsapi oapi my-api.json my-api.ts
 
 1. Install [Rust](https://www.rust-lang.org/)
 2. Run `cargo test`
+## License
+
+MIT licensed, see [LICENSE](./LICENSE) file.
