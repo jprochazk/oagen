@@ -7,7 +7,7 @@ Development is in progress.
 ## Installation
 
 1. Install [Rust](https://www.rust-lang.org/)
-2. Run `cargo install --git https://github.com/keboola/api-type-gen.git`
+2. Run `cargo install --git https://github.com/jprochazk/api-type-gen.git`
 3. CLI is available globally as `tsapi`
 
 **Commands**
