@@ -39,7 +39,7 @@ pub struct Parameter<'src> {
   pub ty: TypeRef<'src>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParameterKind {
   Path,
   Query,
@@ -93,7 +93,7 @@ pub struct Response<'src> {
   pub body: Option<TypeRef<'src>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Security<'src> {
   pub name: Cow<'src, str>,
   pub key: Cow<'src, str>,
@@ -138,7 +138,7 @@ pub enum Type<'src> {
   Optional(Box<TypeRef<'src>>),
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Method {
   Get,
   Post,
@@ -207,7 +207,7 @@ impl std::fmt::Display for Method {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum MimeType {
   Multipart_FormData,
   Application_FormUrlEncoded,

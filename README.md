@@ -1,38 +1,26 @@
-### TypeScript API Type Generator
+# oagen
 
-Command line tool that transforms OpenAPI (Swagger) or API Blueprint (Apiary) specifications into TypeScript.
+CLI for generating API client code using OpenAPI specifications.
 
 Development is in progress.
-
-## Installation
-
-1. Install [Rust](https://www.rust-lang.org/)
-2. Run `cargo install --git https://github.com/jprochazk/api-type-gen.git`
-3. CLI is available globally as `tsapi`
-
-**Commands**
-
-- `help`
-- `oapi <input> <output>`
-- 🚧 `apib <input> <output>`
-
-Commands marked with 🚧 are not yet implemented.
-
-Examples:
-
-```
-$ tsapi oapi my-api.json my-api.ts
-```
 
 ## Usage
 
 1. Install [Rust](https://www.rust-lang.org/)
-2. Run `cargo run -- <args>` where `<args>` are the same as described above in `Installation`.
+2. Run `cargo install --git https://github.com/jprochazk/oagen.git`
+3. CLI is available globally as `oagen`:
 
-## Running tests
+```
+$ oagen spec.json client.ts
+```
 
-1. Install [Rust](https://www.rust-lang.org/)
-2. Run `cargo test`
+## Development
+
+### Running tests
+
+```
+$ cargo test
+```
 
 ## License
 

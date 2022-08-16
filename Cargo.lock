@@ -125,6 +125,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bf2e165bb3457c8e098ea76f3e3bc9db55f87aa90d52d0e6be741470916aaa4"
 
 [[package]]
+name = "oagen"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "openapiv3",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "structopt",
+ "thiserror",
+]
+
+[[package]]
 name = "openapiv3"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,20 +317,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tsapi"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "indexmap",
- "openapiv3",
- "pretty_assertions",
- "serde",
- "serde_json",
- "structopt",
- "thiserror",
 ]
 
 [[package]]
