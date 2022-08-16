@@ -1,7 +1,12 @@
 [package]
 name = "oagen"
+description = "Generate API client code using OpenAPI specifications"
+repository = "https://github.com/jprochazk/oagen"
+license = "MIT OR Apache-2.0"
 version = "0.0.1"
+authors = ["jprochazk"]
 edition = "2021"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
